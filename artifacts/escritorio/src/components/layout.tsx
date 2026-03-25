@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Scale, Users, FileText, Search, Menu, X } from "lucide-react";
+import { Users, Search, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -16,9 +16,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col md:flex-row w-full">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 bg-primary text-primary-foreground">
-        <div className="flex items-center gap-2">
-          <Scale className="h-6 w-6 text-accent" />
-          <span className="font-display font-bold text-lg tracking-wide">Mendes Advocacia</span>
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo-promarcos.png"
+            alt="Promarcos"
+            className="w-9 h-9 rounded-xl object-cover shadow-lg"
+          />
+          <span className="font-display font-bold text-lg tracking-wide">Promarcos - Clientes</span>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
           {isMobileMenuOpen ? <X /> : <Menu />}
@@ -34,10 +38,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
       >
         <div className="p-8 hidden md:flex flex-col items-center border-b border-primary-foreground/10">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-amber-600 flex items-center justify-center shadow-lg shadow-accent/20 mb-4">
-            <Scale className="h-8 w-8 text-primary-foreground" />
+          <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 mb-4 bg-[#2a4a7a] flex items-center justify-center">
+            <img
+              src="/logo-promarcos.png"
+              alt="Promarcos"
+              className="w-[150%] h-[150%] object-cover"
+              style={{ objectPosition: "50% 52%", marginTop: "8px" }}
+            />
           </div>
-          <h1 className="font-display font-bold text-xl tracking-wider text-center">Mendes<br/>Advocacia</h1>
+          <h1 className="font-display font-bold text-xl tracking-wider text-center leading-tight">
+            Promarcos<br/>
+            <span className="text-sm font-normal text-primary-foreground/70 tracking-widest uppercase">Clientes</span>
+          </h1>
         </div>
 
         <nav className="flex-1 py-8 px-4 space-y-2">
@@ -64,12 +76,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         <div className="p-4 border-t border-primary-foreground/10">
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary-foreground/5">
-            <div className="w-8 h-8 rounded-full bg-primary-foreground/10 flex items-center justify-center">
-              <span className="font-bold text-sm text-accent">MA</span>
-            </div>
+            <img
+              src="/logo-promarcos.png"
+              alt="Promarcos"
+              className="w-8 h-8 rounded-full object-cover"
+            />
             <div className="flex flex-col">
-              <span className="text-sm font-semibold">Dr. Marcos</span>
-              <span className="text-xs text-primary-foreground/50">Administrador</span>
+              <span className="text-sm font-semibold">Promarcos</span>
+              <span className="text-xs text-primary-foreground/50">Sistema de Gestão Jurídica</span>
             </div>
           </div>
         </div>
@@ -78,7 +92,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 animate-fade-in relative">
-          {/* Decorative background element */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full blur-3xl -z-10 pointer-events-none" />
           {children}
         </div>
