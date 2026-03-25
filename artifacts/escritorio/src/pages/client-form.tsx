@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { useLocation, useParams, Link } from "wouter";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useLocation, useParams, useSearch, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -56,12 +56,15 @@ type ClientFormData = z.infer<typeof clientSchema>;
 export default function ClientForm() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
+  const search = useSearch();
+  const cpfFromUrl = useMemo(() => new URLSearchParams(search).get("cpf") || "", [search]);
   const isEditing = Boolean(id && id !== "novo");
   const clientId = parseInt(id || "0");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<"cadastro" | "processos" | "documentos">("cadastro");
+  const [promarkosPreloaded, setPromarkosPreloaded] = useState(false);
 
   // --- Promarcos escritórios ---
   const [empresas, setEmpresas] = useState<PromarkosEscritorio[]>([]);
@@ -98,10 +101,59 @@ export default function ClientForm() {
     }
   }, [clientData, reset]);
 
-  // --- CPF watch → check Promarcos ---
+  // --- Auto-load from URL ?cpf= param ---
+  useEffect(() => {
+    if (!cpfFromUrl || isEditing) return;
+    const load = async () => {
+      setCpfChecking(true);
+      try {
+        const result = await buscarPorCpf(cpfFromUrl);
+        if (result.existe && result.pessoas.length > 0) {
+          const p = result.pessoas[0];
+          setCpfCheckResult({ existe: true, pessoa: p });
+          const nascFormatted = p.nascimento
+            ? (() => {
+                const d = new Date(p.nascimento!);
+                return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+              })()
+            : "";
+          const sexoLabel = p.sexo === "M" ? "Masculino" : p.sexo === "F" ? "Feminino" : p.sexo || "";
+          setValue("cpf", formatCPF(cpfFromUrl));
+          setValue("nomeCompleto", p.razao_social || "");
+          setValue("dataNascimento", nascFormatted);
+          setValue("sexo", sexoLabel);
+          setValue("estadoCivil", p.estado_civil || "");
+          setValue("rgRepresentante", p.rg || "");
+          setValue("orgaoEmissor", p.orgaoemissor || "");
+          setValue("profissao", p.profissao || "");
+          setValue("telefone", p.telefone1 || "");
+          setValue("telefone2", p.telefone2 || "");
+          setValue("email", p.email1 || "");
+          setValue("cep", p.cep ? formatCEP(p.cep) : "");
+          setValue("logradouro", p.logradouro || "");
+          setValue("numero", p.numero || "");
+          setValue("complemento", p.complemento || "");
+          setValue("bairro", p.bairro || "");
+          setValue("cidade", p.cidade || "");
+          setValue("estado", p.estado || "");
+          setPromarkosPreloaded(true);
+        } else {
+          setValue("cpf", formatCPF(cpfFromUrl));
+          setCpfCheckResult({ existe: false });
+        }
+      } catch {
+        setCpfCheckResult(null);
+      } finally {
+        setCpfChecking(false);
+      }
+    };
+    load();
+  }, [cpfFromUrl, isEditing]);
+
+  // --- CPF watch → check Promarcos (only for manual typing) ---
   const cpfValue = watch("cpf");
   useEffect(() => {
-    if (isEditing) return;
+    if (isEditing || promarkosPreloaded) return;
     const cpfNums = cpfValue?.replace(/\D/g, "") || "";
     if (cpfNums.length !== 11) {
       setCpfCheckResult(null);
@@ -123,7 +175,7 @@ export default function ClientForm() {
         setCpfChecking(false);
       }
     }, 600);
-  }, [cpfValue, isEditing]);
+  }, [cpfValue, isEditing, promarkosPreloaded]);
 
   // --- Masks & External API ---
   const cepValue = watch("cep");
@@ -306,9 +358,12 @@ export default function ClientForm() {
             </Link>
             <div>
               <h1 className="text-3xl font-display font-bold text-primary">
-                {isEditing ? "Editar Cliente" : "Novo Cadastro"}
+                {isEditing ? "Editar Cliente" : promarkosPreloaded ? "Atualizar Cadastro" : "Novo Cadastro"}
               </h1>
               {isEditing && <p className="text-muted-foreground">ID: #{clientId} • {clientData?.nomeCompleto}</p>}
+              {promarkosPreloaded && cpfCheckResult?.pessoa && (
+                <p className="text-muted-foreground font-medium">{cpfCheckResult.pessoa.razao_social}</p>
+              )}
             </div>
           </div>
           
@@ -379,7 +434,16 @@ export default function ClientForm() {
                 </h2>
 
                 {/* CPF Promarcos Alert */}
-                {!isEditing && cpfCheckResult?.existe && cpfCheckResult.pessoa && (
+                {!isEditing && promarkosPreloaded && cpfCheckResult?.pessoa && (
+                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 rounded-xl bg-blue-50 border-2 border-blue-200 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-blue-800 text-sm">Dados carregados do Promarcos</p>
+                      <p className="text-blue-600 text-sm mt-0.5">Confira e atualize as informações abaixo. O CPF não pode ser alterado.</p>
+                    </div>
+                  </motion.div>
+                )}
+                {!isEditing && !promarkosPreloaded && cpfCheckResult?.existe && cpfCheckResult.pessoa && (
                   <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 rounded-xl bg-amber-50 border-2 border-amber-300 flex flex-col gap-3">
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -416,7 +480,7 @@ export default function ClientForm() {
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
-                  <FormInput form={formCtx} label="CPF *" name="cpf" maskFn={formatCPF} placeholder="000.000.000-00" />
+                  <FormInput form={formCtx} label="CPF *" name="cpf" maskFn={promarkosPreloaded || isEditing ? undefined : formatCPF} placeholder="000.000.000-00" readOnly={promarkosPreloaded || isEditing} />
                   <div className="lg:col-span-2">
                     <FormInput form={formCtx} label="Nome Completo *" name="nomeCompleto" placeholder="Nome do cliente" />
                   </div>

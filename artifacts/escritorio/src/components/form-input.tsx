@@ -46,7 +46,8 @@ export function FormInput({ form, label, name, maskFn, optional, ...props }: For
         }}
         className={cn(
           "w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200",
-          form.errors[name] && "border-destructive focus:border-destructive focus:ring-destructive/10"
+          form.errors[name] && "border-destructive focus:border-destructive focus:ring-destructive/10",
+          props.readOnly && "bg-muted/60 cursor-not-allowed text-muted-foreground select-none border-border/50"
         )}
         {...props}
       />
