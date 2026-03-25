@@ -165,6 +165,96 @@ router.put("/promarcos/processos/:processoId", async (req, res) => {
   }
 });
 
+router.get("/promarcos/buscarsocio/:termo", async (req, res) => {
+  try {
+    const { termo } = req.params;
+    const upstream = await fetch(`${PROMARCOS_BASE}/pessoas/buscarsocio/${encodeURIComponent(termo)}`);
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json([]);
+  }
+});
+
+router.get("/promarcos/comissao/processo/:processoId", async (req, res) => {
+  try {
+    const { processoId } = req.params;
+    const upstream = await fetch(`${PROMARCOS_BASE}/comissao/processo/${processoId}`);
+    const data = await upstream.json();
+    const list = Array.isArray(data) ? data : [];
+    res.status(200).json(list);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json([]);
+  }
+});
+
+router.post("/promarcos/comissao", async (req, res) => {
+  try {
+    const upstream = await fetch(`${PROMARCOS_BASE}/comissao`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json({ sucesso: false });
+  }
+});
+
+router.post("/promarcos/comissao/del/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const upstream = await fetch(`${PROMARCOS_BASE}/comissao/del/${id}`, { method: "POST" });
+    res.status(upstream.status).json({ sucesso: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json({ sucesso: false });
+  }
+});
+
+router.get("/promarcos/socios/processo/:processoId", async (req, res) => {
+  try {
+    const { processoId } = req.params;
+    const upstream = await fetch(`${PROMARCOS_BASE}/socios/processo/${processoId}`);
+    const data = await upstream.json();
+    const list = Array.isArray(data) ? data : [];
+    res.status(200).json(list);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json([]);
+  }
+});
+
+router.post("/promarcos/socios", async (req, res) => {
+  try {
+    const upstream = await fetch(`${PROMARCOS_BASE}/socios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json({ sucesso: false });
+  }
+});
+
+router.post("/promarcos/socios/del/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const upstream = await fetch(`${PROMARCOS_BASE}/socios/del/${id}`, { method: "POST" });
+    res.status(upstream.status).json({ sucesso: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json({ sucesso: false });
+  }
+});
+
 router.get("/promarcos/folharosto/:pessoaId", async (req, res) => {
   try {
     const { pessoaId } = req.params;

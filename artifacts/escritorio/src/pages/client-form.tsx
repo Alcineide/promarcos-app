@@ -3,7 +3,7 @@ import { useLocation, useParams, useSearch, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, editarProcessoPromarcos, gerarFolhaRosto, uploadArquivoPromarcos, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo } from "@/lib/promarcos-api";
+import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, editarProcessoPromarcos, gerarFolhaRosto, uploadArquivoPromarcos, buscarSocio, buscarIndicadoresProcesso, adicionarIndicador, removerIndicador, buscarSociosProcesso, adicionarSocio, removerSocio, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo, type ProcessoIndicador, type ProcessoSocioParsed, type BuscarSocioResult } from "@/lib/promarcos-api";
 import { 
   User, Phone, MapPin, FileText, FolderOpen, Save, 
   ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase, Loader2, RefreshCw, ExternalLink
@@ -74,6 +74,19 @@ export default function ClientForm() {
   const [isPromarkosProcessoModalOpen, setPromarkosProcessoModalOpen] = useState(false);
   const [editingPromarkosProcesso, setEditingPromarkosProcesso] = useState<PromarkosProcesso | null>(null);
   const [showObservacoes, setShowObservacoes] = useState(false);
+  const [processoIndicadores, setProcessoIndicadores] = useState<ProcessoIndicador[]>([]);
+  const [processoSocios, setProcessoSocios] = useState<ProcessoSocioParsed[]>([]);
+  const [loadingComissoes, setLoadingComissoes] = useState(false);
+  const [novoIndTermo, setNovoIndTermo] = useState("");
+  const [novoIndResultados, setNovoIndResultados] = useState<BuscarSocioResult[]>([]);
+  const [novoIndSelecionado, setNovoIndSelecionado] = useState<BuscarSocioResult | null>(null);
+  const [novoIndPercentual, setNovoIndPercentual] = useState<number>(0);
+  const [adicionandoInd, setAdicionandoInd] = useState(false);
+  const [novoSocioTermo, setNovoSocioTermo] = useState("");
+  const [novoSocioResultados, setNovoSocioResultados] = useState<BuscarSocioResult[]>([]);
+  const [novoSocioSelecionado, setNovoSocioSelecionado] = useState<BuscarSocioResult | null>(null);
+  const [novoSocioPercentual, setNovoSocioPercentual] = useState<number>(0);
+  const [adicionandoSocio, setAdicionandoSocio] = useState(false);
   const emptyPromarkosProcesso = {
     escritorioid: 0,
     beneficioid_categoria: 0,
@@ -423,6 +436,83 @@ export default function ClientForm() {
       const tipos = await buscarBeneficioTipos(beneficioid);
       setBeneficioTipos(tipos);
     }
+  };
+
+  useEffect(() => {
+    if (editingPromarkosProcesso) {
+      setLoadingComissoes(true);
+      setProcessoIndicadores([]);
+      setProcessoSocios([]);
+      setNovoIndTermo(""); setNovoIndSelecionado(null); setNovoIndPercentual(0); setNovoIndResultados([]);
+      setNovoSocioTermo(""); setNovoSocioSelecionado(null); setNovoSocioPercentual(0); setNovoSocioResultados([]);
+      Promise.all([
+        buscarIndicadoresProcesso(editingPromarkosProcesso.id),
+        buscarSociosProcesso(editingPromarkosProcesso.id),
+      ]).then(([inds, socios]) => {
+        setProcessoIndicadores(inds);
+        setProcessoSocios(socios);
+        setLoadingComissoes(false);
+      });
+    } else {
+      setProcessoIndicadores([]);
+      setProcessoSocios([]);
+    }
+  }, [editingPromarkosProcesso?.id]);
+
+  useEffect(() => {
+    if (!novoIndTermo || novoIndTermo.length < 2) { setNovoIndResultados([]); return; }
+    const t = setTimeout(async () => {
+      const results = await buscarSocio(novoIndTermo);
+      setNovoIndResultados(results.slice(0, 8));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [novoIndTermo]);
+
+  useEffect(() => {
+    if (!novoSocioTermo || novoSocioTermo.length < 2) { setNovoSocioResultados([]); return; }
+    const t = setTimeout(async () => {
+      const results = await buscarSocio(novoSocioTermo);
+      setNovoSocioResultados(results.slice(0, 8));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [novoSocioTermo]);
+
+  const handleAdicionarIndicador = async () => {
+    if (!novoIndSelecionado || !editingPromarkosProcesso) return;
+    setAdicionandoInd(true);
+    const result = await adicionarIndicador(editingPromarkosProcesso.id, novoIndSelecionado.codigo, novoIndPercentual);
+    if (result.sucesso) {
+      const fresh = await buscarIndicadoresProcesso(editingPromarkosProcesso.id);
+      setProcessoIndicadores(fresh);
+      setNovoIndTermo(""); setNovoIndSelecionado(null); setNovoIndPercentual(0); setNovoIndResultados([]);
+    } else {
+      toast({ title: "Erro", description: result.mensagem || "Falha ao adicionar indicador", variant: "destructive" });
+    }
+    setAdicionandoInd(false);
+  };
+
+  const handleRemoverIndicador = async (id: number) => {
+    await removerIndicador(id);
+    setProcessoIndicadores(prev => prev.filter(i => i.id !== id));
+  };
+
+  const handleAdicionarSocio = async () => {
+    if (!novoSocioSelecionado || !editingPromarkosProcesso) return;
+    setAdicionandoSocio(true);
+    const result = await adicionarSocio(editingPromarkosProcesso.id, novoSocioSelecionado.codigo, novoSocioPercentual);
+    if (result.sucesso) {
+      const fresh = await buscarSociosProcesso(editingPromarkosProcesso.id);
+      setProcessoSocios(fresh);
+      setNovoSocioTermo(""); setNovoSocioSelecionado(null); setNovoSocioPercentual(0); setNovoSocioResultados([]);
+    } else {
+      toast({ title: "Erro", description: result.mensagem || "Falha ao adicionar sócio", variant: "destructive" });
+    }
+    setAdicionandoSocio(false);
+  };
+
+  const handleRemoverSocio = async (id: number) => {
+    await removerSocio(id);
+    setProcessoSocios(prev => prev.filter(s => s.id !== id));
   };
 
   const handleCriarPromarkosProcesso = async () => {
@@ -1299,63 +1389,146 @@ export default function ClientForm() {
 
                 {/* Indicadores */}
                 <div className="border border-border rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-base font-semibold text-primary">Indicadores</span>
-                    <div className="flex items-center gap-2">
-                      <div className="relative">
-                        <label className="absolute -top-2 left-2 text-[10px] text-muted-foreground bg-card px-0.5">Percentual de referência (%)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={novoPromarkosProcesso.percentualIndicador}
-                          onChange={e => setNovoPromarkosProcesso(p => ({ ...p, percentualIndicador: Number(e.target.value) }))}
-                          className="w-28 px-2 py-2 border border-border rounded text-sm focus:border-primary outline-none bg-background"
-                        />
-                      </div>
-                      <button type="button" className="px-3 py-2 border border-border rounded text-sm font-medium hover:bg-muted transition-colors">Distribuir</button>
-                      <button type="button" className="px-3 py-2 bg-primary text-primary-foreground rounded text-sm font-semibold hover:bg-primary/90 transition-colors flex items-center gap-1">
-                        <span className="text-base leading-none">+</span> Novo
-                      </button>
-                    </div>
+                    {processoIndicadores.length > 0 && (
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{processoIndicadores.length} cadastrado{processoIndicadores.length > 1 ? "s" : ""}</span>
+                    )}
                   </div>
-                  {editingPromarkosProcesso && editingPromarkosProcesso.Indicadores && editingPromarkosProcesso.Indicadores.length > 0 ? (
+                  {loadingComissoes ? (
+                    <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+                  ) : processoIndicadores.length > 0 ? (
                     <ul className="space-y-1">
-                      {editingPromarkosProcesso.Indicadores.map(ind => (
-                        <li key={ind.id} className="flex items-center justify-between text-sm py-1 border-b border-border/40 last:border-0">
-                          <span className="font-medium text-foreground">{ind.Nome}</span>
-                          <span className="text-xs text-muted-foreground">#{ind.id}</span>
+                      {processoIndicadores.map(ind => (
+                        <li key={ind.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40 last:border-0 group">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-primary">
+                              {ind.Indicador.Nome.charAt(0)}
+                            </div>
+                            <span className="font-medium text-foreground truncate">{ind.Indicador.Nome}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">{ind.percentual ?? 0}%</span>
+                            <button type="button" onClick={() => handleRemoverIndicador(ind.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded text-red-400 hover:text-red-600 transition-all" title="Remover">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
+                  ) : !editingPromarkosProcesso ? (
+                    <p className="text-sm text-muted-foreground">Salve o processo para adicionar indicadores.</p>
                   ) : (
                     <p className="text-sm text-muted-foreground">Nenhum indicador cadastrado.</p>
+                  )}
+                  {editingPromarkosProcesso && (
+                    <div className="pt-2 border-t border-border/40 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Adicionar indicador</p>
+                      <div className="flex gap-2 items-start">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            placeholder="Buscar por nome..."
+                            value={novoIndTermo}
+                            onChange={e => { setNovoIndTermo(e.target.value); setNovoIndSelecionado(null); }}
+                            className="w-full px-3 py-2 border border-border rounded text-sm focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none bg-background"
+                          />
+                          {novoIndResultados.length > 0 && (
+                            <div className="absolute top-full left-0 z-50 w-full bg-card border border-border rounded-lg shadow-xl mt-0.5 max-h-44 overflow-y-auto">
+                              {novoIndResultados.map(p => (
+                                <button key={p.codigo} type="button" onClick={() => { setNovoIndSelecionado(p); setNovoIndTermo(p.razao_social); setNovoIndResultados([]); }} className="w-full text-left px-3 py-2 hover:bg-muted text-sm flex items-center gap-2">
+                                  <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary flex-shrink-0">{p.razao_social.charAt(0)}</div>
+                                  <div className="min-w-0">
+                                    <p className="truncate font-medium text-xs">{p.razao_social}</p>
+                                    <p className="text-[10px] text-muted-foreground">{p.cpf}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="relative w-16 flex-shrink-0">
+                          <label className="absolute -top-2 left-2 text-[9px] text-muted-foreground bg-card px-0.5">%</label>
+                          <input type="number" min={0} max={100} value={novoIndPercentual} onChange={e => setNovoIndPercentual(Number(e.target.value))} className="w-full px-2 py-2 border border-border rounded text-sm focus:border-primary outline-none bg-background text-center" />
+                        </div>
+                        <button type="button" onClick={handleAdicionarIndicador} disabled={!novoIndSelecionado || adicionandoInd} className="px-3 py-2 bg-primary text-primary-foreground rounded text-sm font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex-shrink-0 flex items-center justify-center" style={{ minWidth: 36 }}>
+                          {adicionandoInd ? <Loader2 className="w-4 h-4 animate-spin" /> : "+"}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
 
                 {/* Sócios / Parceiro */}
                 <div className="border border-border rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-base font-semibold text-primary">Sócios/ Parceiro</span>
-                    <div className="flex items-center gap-2">
-                      <div className="relative">
-                        <label className="absolute -top-2 left-2 text-[10px] text-muted-foreground bg-card px-0.5">Percentual de referência (%)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={novoPromarkosProcesso.percentualSocio}
-                          onChange={e => setNovoPromarkosProcesso(p => ({ ...p, percentualSocio: Number(e.target.value) }))}
-                          className="w-28 px-2 py-2 border border-border rounded text-sm focus:border-primary outline-none bg-background"
-                        />
-                      </div>
-                      <button type="button" disabled className="px-3 py-2 border border-border rounded text-sm font-medium opacity-40 cursor-not-allowed">Distribuir</button>
-                      <button type="button" className="px-3 py-2 bg-primary text-primary-foreground rounded text-sm font-semibold hover:bg-primary/90 transition-colors flex items-center gap-1">
-                        <span className="text-base leading-none">+</span> Novo
-                      </button>
-                    </div>
+                    {processoSocios.length > 0 && (
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{processoSocios.length} cadastrado{processoSocios.length > 1 ? "s" : ""}</span>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground">Nenhum sócio cadastrado.</p>
+                  {loadingComissoes ? (
+                    <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+                  ) : processoSocios.length > 0 ? (
+                    <ul className="space-y-1">
+                      {processoSocios.map(s => (
+                        <li key={s.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40 last:border-0 group">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-blue-600">
+                              {s.socios.razao_social.charAt(0)}
+                            </div>
+                            <span className="font-medium text-foreground truncate">{s.socios.razao_social}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs font-semibold text-blue-600 bg-blue-500/10 px-2 py-0.5 rounded-full">{s.percentual ?? 0}%</span>
+                            <button type="button" onClick={() => handleRemoverSocio(s.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded text-red-400 hover:text-red-600 transition-all" title="Remover">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : !editingPromarkosProcesso ? (
+                    <p className="text-sm text-muted-foreground">Salve o processo para adicionar sócios.</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhum sócio cadastrado.</p>
+                  )}
+                  {editingPromarkosProcesso && (
+                    <div className="pt-2 border-t border-border/40 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Adicionar sócio / parceiro</p>
+                      <div className="flex gap-2 items-start">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            placeholder="Buscar por nome..."
+                            value={novoSocioTermo}
+                            onChange={e => { setNovoSocioTermo(e.target.value); setNovoSocioSelecionado(null); }}
+                            className="w-full px-3 py-2 border border-border rounded text-sm focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none bg-background"
+                          />
+                          {novoSocioResultados.length > 0 && (
+                            <div className="absolute top-full left-0 z-50 w-full bg-card border border-border rounded-lg shadow-xl mt-0.5 max-h-44 overflow-y-auto">
+                              {novoSocioResultados.map(p => (
+                                <button key={p.codigo} type="button" onClick={() => { setNovoSocioSelecionado(p); setNovoSocioTermo(p.razao_social); setNovoSocioResultados([]); }} className="w-full text-left px-3 py-2 hover:bg-muted text-sm flex items-center gap-2">
+                                  <div className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center text-[9px] font-bold text-blue-600 flex-shrink-0">{p.razao_social.charAt(0)}</div>
+                                  <div className="min-w-0">
+                                    <p className="truncate font-medium text-xs">{p.razao_social}</p>
+                                    <p className="text-[10px] text-muted-foreground">{p.cpf}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="relative w-16 flex-shrink-0">
+                          <label className="absolute -top-2 left-2 text-[9px] text-muted-foreground bg-card px-0.5">%</label>
+                          <input type="number" min={0} max={100} value={novoSocioPercentual} onChange={e => setNovoSocioPercentual(Number(e.target.value))} className="w-full px-2 py-2 border border-border rounded text-sm focus:border-primary outline-none bg-background text-center" />
+                        </div>
+                        <button type="button" onClick={handleAdicionarSocio} disabled={!novoSocioSelecionado || adicionandoSocio} className="px-3 py-2 bg-blue-600 text-white rounded text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex-shrink-0 flex items-center justify-center" style={{ minWidth: 36 }}>
+                          {adicionandoSocio ? <Loader2 className="w-4 h-4 animate-spin" /> : "+"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bottom row: Escritório + Benefício + Tipo benefício */}

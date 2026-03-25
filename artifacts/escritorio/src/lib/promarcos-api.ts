@@ -202,6 +202,116 @@ export async function criarProcessoPromarcos(data: {
   }
 }
 
+export interface ProcessoIndicador {
+  id: number;
+  processoid: number;
+  pessoaid: number;
+  percentual: number | null;
+  valorcomissao: number | null;
+  Indicador: { Codigo: number; Nome: string };
+}
+
+export interface ProcessoSocioParsed {
+  id: number;
+  processoid: number;
+  pessoaid: number;
+  percentual: number | null;
+  valorcomissao: number | null;
+  socios: { Codigo: number; razao_social: string };
+}
+
+export interface BuscarSocioResult {
+  codigo: number;
+  razao_social: string;
+  cpf: string;
+}
+
+export async function buscarSocio(termo: string): Promise<BuscarSocioResult[]> {
+  try {
+    if (!termo || termo.length < 2) return [];
+    const res = await fetch(`${PROXY_BASE}/buscarsocio/${encodeURIComponent(termo)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function buscarIndicadoresProcesso(processoId: number): Promise<ProcessoIndicador[]> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/comissao/processo/${processoId}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function adicionarIndicador(processoid: number, pessoaid: number, percentual: number): Promise<{ sucesso: boolean; mensagem?: string }> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/comissao`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ processoid, pessoaid, percentual, valorcomissao: 0 }),
+    });
+    if (!res.ok) {
+      const data = await res.json() as Record<string, unknown>;
+      return { sucesso: false, mensagem: (data?.mensagem as string) || "Erro ao adicionar indicador" };
+    }
+    return { sucesso: true };
+  } catch {
+    return { sucesso: false, mensagem: "Erro de conexão" };
+  }
+}
+
+export async function removerIndicador(id: number): Promise<{ sucesso: boolean }> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/comissao/del/${id}`, { method: "POST" });
+    return { sucesso: res.ok };
+  } catch {
+    return { sucesso: false };
+  }
+}
+
+export async function buscarSociosProcesso(processoId: number): Promise<ProcessoSocioParsed[]> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/socios/processo/${processoId}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function adicionarSocio(processoid: number, pessoaid: number, percentual: number): Promise<{ sucesso: boolean; mensagem?: string }> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/socios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ processoid, pessoaid, percentual, valorcomissao: 0 }),
+    });
+    if (!res.ok) {
+      const data = await res.json() as Record<string, unknown>;
+      return { sucesso: false, mensagem: (data?.mensagem as string) || "Erro ao adicionar sócio" };
+    }
+    return { sucesso: true };
+  } catch {
+    return { sucesso: false, mensagem: "Erro de conexão" };
+  }
+}
+
+export async function removerSocio(id: number): Promise<{ sucesso: boolean }> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/socios/del/${id}`, { method: "POST" });
+    return { sucesso: res.ok };
+  } catch {
+    return { sucesso: false };
+  }
+}
+
 export interface SalvarPessoaPayload {
   Pessoa: {
     razao_social: string;
