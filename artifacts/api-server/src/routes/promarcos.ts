@@ -89,39 +89,31 @@ router.get("/promarcos/beneficiotipo/:beneficioId", async (req, res) => {
 
 router.post("/promarcos/processos", async (req, res) => {
   try {
-    const { escritorioid, beneficioid, pessoaid, dataentrada, urgencia, modo,
-            numeroprocesso, fluxo, estagio, observacoes, fatogerador,
-            numeropasta, terrapropia, incra, vinculoemprego } = req.body;
+    const { escritorioid, beneficioid, pessoaid, dataentrada, urgencia,
+            numeroprocesso, observacoes, numeropasta, usuariocadastro } = req.body;
 
-    const form = new globalThis.FormData();
-    form.append("escritorioid", String(escritorioid));
-    form.append("beneficioid", String(beneficioid));
-    form.append("pessoaid", String(pessoaid));
-    form.append("dataentrada", dataentrada || new Date().toISOString().split("T")[0]);
-    form.append("valorprocesso", "0");
-    form.append("usuariocadastro", "1");
-    form.append("datacadastro", new Date().toISOString());
-    form.append("urgencia", String(urgencia ?? false));
-    form.append("modo", modo || "novo");
-    if (numeroprocesso) form.append("numeroprocesso", String(numeroprocesso));
-    if (fluxo) form.append("fluxo", String(fluxo));
-    if (estagio) form.append("estagio", String(estagio));
-    if (observacoes) form.append("observacoes", String(observacoes));
-    if (fatogerador) form.append("fatogerador", String(fatogerador));
-    if (numeropasta) form.append("numeropasta", String(numeropasta));
-    if (terrapropia) form.append("terrapropia", String(terrapropia));
-    if (incra) form.append("incra", String(incra));
-    if (vinculoemprego) form.append("vinculoemprego", String(vinculoemprego));
-    const emptyBlob = new Blob([""], { type: "application/octet-stream" });
-    form.append("arquivo", emptyBlob, "empty.bin");
+    const payload: Record<string, unknown> = {
+      escritorioid: Number(escritorioid),
+      beneficioid: Number(beneficioid),
+      pessoaid: Number(pessoaid),
+      dataentrada: dataentrada || new Date().toISOString().split("T")[0],
+      valorprocesso: 0,
+      usuariocadastro: usuariocadastro ? Number(usuariocadastro) : 32,
+      urgencia: Boolean(urgencia ?? false),
+      GerarFluxo: false,
+      numeropasta: numeropasta ? Number(numeropasta) : 0,
+    };
+    if (numeroprocesso) payload.numeroprocesso = String(numeroprocesso);
+    if (observacoes) payload.observacoes = String(observacoes);
 
-    const upstream = await fetch(`${PROMARCOS_BASE}/processo`, {
+    const upstream = await fetch(`${PROMARCOS_BASE}/processo/simples`, {
       method: "POST",
-      body: form,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
 
     const text = await upstream.text();
-    req.log.info({ status: upstream.status, body: text }, "Promarcos POST /processo response");
+    req.log.info({ status: upstream.status, body: text.substring(0, 300) }, "Promarcos POST /processo/simples response");
     let data: unknown;
     try { data = JSON.parse(text); } catch { data = { message: text }; }
     res.status(upstream.status).json(data);

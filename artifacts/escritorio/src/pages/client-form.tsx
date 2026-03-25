@@ -105,6 +105,7 @@ export default function ClientForm() {
     numeropasta: "",
     percentualIndicador: 0,
     percentualSocio: 0,
+    usuariocadastro: 32,
   };
   const [gerandoFolha, setGerandoFolha] = useState<number | null>(null);
   const [novoPromarkosProcesso, setNovoPromarkosProcesso] = useState<typeof emptyPromarkosProcesso>(emptyPromarkosProcesso);
@@ -586,6 +587,7 @@ export default function ClientForm() {
         terrapropia: novoPromarkosProcesso.terrapropia,
         incra: novoPromarkosProcesso.incra,
         vinculoemprego: novoPromarkosProcesso.vinculoemprego,
+        usuariocadastro: novoPromarkosProcesso.usuariocadastro,
       } as Parameters<typeof criarProcessoPromarcos>[0];
 
       let result: { sucesso: boolean; mensagem?: string };
@@ -1699,6 +1701,16 @@ export default function ClientForm() {
                       type="text"
                       value={novoPromarkosProcesso.numeropasta}
                       onChange={e => setNovoPromarkosProcesso(p => ({ ...p, numeropasta: e.target.value }))}
+                      className="w-full px-3 py-2.5 border border-border rounded text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    />
+                  </div>
+                  {/* Usuário Promarcos */}
+                  <div className="mt-3 w-36 relative">
+                    <label className="absolute -top-2 left-2 text-[10px] text-muted-foreground bg-card px-0.5">Cód. Usuário</label>
+                    <input
+                      type="number"
+                      value={novoPromarkosProcesso.usuariocadastro}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, usuariocadastro: Number(e.target.value) }))}
                       className="w-full px-3 py-2.5 border border-border rounded text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
                     />
                   </div>

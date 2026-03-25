@@ -175,7 +175,7 @@ export async function criarProcessoPromarcos(data: {
   pessoaid: number;
   dataentrada: string;
   urgencia: boolean;
-  modo: string;
+  modo?: string;
   numeroprocesso?: string;
   fluxo?: string;
   estagio?: string;
@@ -185,6 +185,7 @@ export async function criarProcessoPromarcos(data: {
   terrapropia?: boolean;
   incra?: boolean;
   vinculoemprego?: string;
+  usuariocadastro?: number;
 }): Promise<{ sucesso: boolean; id?: number; mensagem?: string }> {
   try {
     const res = await fetch(`${PROXY_BASE}/processos`, {
@@ -194,9 +195,11 @@ export async function criarProcessoPromarcos(data: {
     });
     const result = await res.json() as Record<string, unknown>;
     if (!res.ok) {
-      return { sucesso: false, mensagem: (result?.message as string) || "Erro ao criar processo" };
+      const msg = (result?.mensagem as string) || (result?.message as string) || "Erro ao criar processo";
+      return { sucesso: false, mensagem: msg };
     }
-    return { sucesso: true, id: result?.processo_id as number | undefined };
+    const id = (result?.id ?? result?.processo_id) as number | undefined;
+    return { sucesso: true, id };
   } catch {
     return { sucesso: false, mensagem: "Erro ao conectar com o Promarcos" };
   }
