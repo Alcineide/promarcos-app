@@ -72,7 +72,24 @@ export default function ClientForm() {
   const [beneficios, setBeneficios] = useState<PromarkosBeneficio[]>([]);
   const [beneficioTipos, setBeneficioTipos] = useState<PromarkosBeneficioTipo[]>([]);
   const [isPromarkosProcessoModalOpen, setPromarkosProcessoModalOpen] = useState(false);
-  const emptyPromarkosProcesso = { escritorioid: 0, beneficioid_categoria: 0, beneficioid: 0, dataentrada: new Date().toISOString().split("T")[0], urgencia: false, modo: "novo" };
+  const [showObservacoes, setShowObservacoes] = useState(false);
+  const emptyPromarkosProcesso = {
+    escritorioid: 0,
+    beneficioid_categoria: 0,
+    beneficioid: 0,
+    dataentrada: new Date().toISOString().split("T")[0],
+    urgencia: false,
+    modo: "novo",
+    numeroprocesso: "",
+    fluxo: "Analise",
+    estagio: "Triagem",
+    observacoes: "",
+    fatogerador: "",
+    terrapropia: false,
+    incra: false,
+    vinculoemprego: "",
+    numeropasta: "",
+  };
   const [novoPromarkosProcesso, setNovoPromarkosProcesso] = useState<typeof emptyPromarkosProcesso>(emptyPromarkosProcesso);
 
   // --- Promarcos escritórios ---
@@ -707,7 +724,7 @@ export default function ClientForm() {
                         onClick={openPromarkosProcessoModal}
                         className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-lg shadow-primary/20 text-sm"
                       >
-                        + Nova Pasta
+                        + Novo Processo
                       </button>
                     )}
                   </div>
@@ -727,60 +744,65 @@ export default function ClientForm() {
                     <Briefcase className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
                     <p className="text-sm text-muted-foreground font-medium">Nenhum processo encontrado no Promarcos para este cliente.</p>
                     <button type="button" onClick={openPromarkosProcessoModal} className="mt-4 px-5 py-2 bg-primary/10 text-primary font-semibold rounded-xl hover:bg-primary/20 transition-colors text-sm">
-                      + Abrir Nova Pasta no Promarcos
+                      + Novo Processo no Promarcos
                     </button>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/50">
+                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {promarkosProcessos.map(p => {
-                      const etapaAtual = p.analista?.[0];
-                      const areaStatus = p.AreaAtual && p.StatusAtual ? `${p.AreaAtual}: ${p.StatusAtual}` : p.StatusAtual || p.AreaAtual || "—";
+                      const areaStatus = p.AreaAtual && p.StatusAtual ? `${p.AreaAtual}:${p.StatusAtual}` : p.StatusAtual || p.AreaAtual || "";
                       const isJud = p.AreaAtual?.toUpperCase().includes("JUD");
-                      const isUrgent = p.urgencia;
                       const dataEntradaFmt = p.dataentrada ? new Date(p.dataentrada).toLocaleDateString("pt-BR") : "—";
+                      const dataFatoFmt = p.datafatogerador ? new Date(p.datafatogerador).toLocaleDateString("pt-BR") : "Não informada";
+                      const cadastradoEmFmt = p.CreatedAt ? new Date(p.CreatedAt).toLocaleDateString("pt-BR") : "—";
                       return (
-                        <div key={p.id} className="p-5 hover:bg-muted/30 transition-colors">
-                          <div className="flex items-start justify-between gap-3 mb-3">
-                            <div>
-                              <h3 className="font-bold text-base">{p.TipoBeneficio || p.beneficio}</h3>
-                              <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                                {p.numeropasta && (
-                                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary text-primary-foreground">
-                                    Pasta {p.numeropasta}
-                                  </span>
-                                )}
-                                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border/60">
-                                  {p.escritorio || p.sigla}
-                                </span>
-                              </div>
+                        <div key={p.id} className="bg-background border border-border rounded-xl overflow-hidden flex flex-col shadow-sm">
+                          <div className="p-4 flex-1">
+                            <h3 className="font-bold text-sm uppercase tracking-wide mb-2">{p.TipoBeneficio || p.beneficio}</h3>
+                            {p.numeropasta && (
+                              <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-[#1a3557] text-white mb-3">
+                                Pasta {String(p.numeropasta).padStart(6, "0")} - {p.sigla}
+                              </span>
+                            )}
+                            <div className="space-y-1 text-sm">
+                              <p><strong>Fato gerador:</strong> {p.nomefatogerador || "Sem fato gerador vinculado"}</p>
+                              <p><strong>Matrícula:</strong> {p.matricula || "Sem matrícula"}</p>
+                              <p><strong>Data fato gerador:</strong> {dataFatoFmt}</p>
+                              <p><strong>Número processo:</strong> {p.numeroprocesso || "Sem número"}</p>
+                              <p><strong>Data entrada:</strong> {dataEntradaFmt}</p>
+                              <p><strong>Escritório:</strong> {p.escritorio}</p>
+                              {p.usuario && <p className="text-xs text-muted-foreground pt-1">Cadastrado em {cadastradoEmFmt} por {p.usuario}</p>}
                             </div>
-                            <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                          </div>
+                          <div className="px-4 pb-2">
+                            <button type="button" className="w-full py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
+                              Gerar folha de Rosto
+                            </button>
+                          </div>
+                          <div className="px-4 py-3 flex items-center justify-between border-t border-border/50">
+                            {areaStatus ? (
                               <span className={cn(
-                                "px-2.5 py-0.5 rounded-full text-xs font-bold",
+                                "px-2.5 py-1 rounded-full text-xs font-bold",
                                 isJud ? "bg-red-500 text-white" :
-                                p.StatusAtual?.includes("Aguardando") ? "bg-amber-100 text-amber-700 border border-amber-200" :
-                                "bg-blue-100 text-blue-700 border border-blue-200"
+                                p.StatusAtual?.toLowerCase().includes("aguardando") ? "bg-blue-500 text-white" :
+                                "bg-blue-500 text-white"
                               )}>
                                 {areaStatus}
                               </span>
-                              {isUrgent && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">⚡ Urgente</span>}
+                            ) : <span />}
+                            <div className="flex items-center gap-1">
+                              {p.urgencia && <span className="text-red-500 font-bold text-xs mr-1">⚡</span>}
+                              <button type="button" className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                              </button>
+                              <button type="button" className="p-1.5 hover:bg-muted rounded-lg transition-colors text-blue-600 hover:text-blue-700">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                              </button>
+                              <button type="button" className="p-1.5 hover:bg-muted rounded-lg transition-colors text-red-500 hover:text-red-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                              </button>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-sm">
-                            <div><span className="font-medium text-muted-foreground">Entrada: </span>{dataEntradaFmt}</div>
-                            <div><span className="font-medium text-muted-foreground">Nº Processo: </span>{p.numeroprocesso || "—"}</div>
-                            {p.nomefatogerador && <div className="md:col-span-1"><span className="font-medium text-muted-foreground">Fato gerador: </span>{p.nomefatogerador}</div>}
-                            {p.matricula && <div><span className="font-medium text-muted-foreground">Matrícula: </span>{p.matricula}</div>}
-                          </div>
-                          {etapaAtual && (
-                            <div className="mt-2.5 p-2.5 bg-muted/50 rounded-lg text-xs">
-                              <span className="font-semibold text-muted-foreground">Etapa atual: </span>
-                              <span>{etapaAtual.Etapa}</span>
-                              {etapaAtual.NomeAnalista && <span className="ml-2 text-muted-foreground/70">• {etapaAtual.NomeAnalista}</span>}
-                              {etapaAtual.PrazoEtapa && <span className="ml-2 text-amber-600 font-medium">• Prazo: {new Date(etapaAtual.PrazoEtapa).toLocaleDateString("pt-BR")}</span>}
-                              {etapaAtual.Comentario && <div className="mt-1 text-muted-foreground italic">{etapaAtual.Comentario}</div>}
-                            </div>
-                          )}
                         </div>
                       );
                     })}
@@ -1065,115 +1087,223 @@ export default function ClientForm() {
         )}
       </AnimatePresence>
 
-      {/* Modal Nova Pasta no Promarcos */}
+      {/* Modal Novo Processo no Promarcos */}
       <AnimatePresence>
         {isPromarkosProcessoModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-card w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-border max-h-[90vh] flex flex-col">
-              <div className="p-5 border-b border-border/50 bg-primary/5 flex-shrink-0">
-                <h3 className="text-lg font-bold flex items-center gap-2">
-                  <Briefcase className="w-5 h-5 text-primary" />
-                  Abrir Nova Pasta no Promarcos
-                </h3>
-                <p className="text-xs text-muted-foreground mt-1">O processo será criado diretamente no sistema Promarcos.</p>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-card w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden border border-border max-h-[92vh] flex flex-col">
+              
+              {/* Header */}
+              <div className="p-5 border-b border-border/50 bg-card flex-shrink-0 flex items-center gap-3">
+                <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Briefcase className="w-4 h-4 text-primary" />
+                </div>
+                <h3 className="text-base font-bold">Novo / Editar Processo</h3>
               </div>
 
               <div className="p-5 space-y-4 overflow-y-auto">
-                {/* Benefício Categoria */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold">Categoria do Benefício *</label>
-                  <select
-                    value={novoPromarkosProcesso.beneficioid_categoria}
-                    onChange={e => handleBeneficioCategoriaChange(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
-                  >
-                    <option value={0}>Selecione...</option>
-                    {beneficios.map(b => (
-                      <option key={b.id} value={b.id}>{b.descricao}</option>
-                    ))}
-                  </select>
+
+                {/* Row 1: Número do Processo + Data entrada + Fluxo + Estágio + Urgência */}
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-end">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground font-medium">Número do Processo</label>
+                    <input
+                      type="text"
+                      placeholder="Número do Processo"
+                      value={novoPromarkosProcesso.numeroprocesso}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, numeroprocesso: e.target.value }))}
+                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground font-medium">Data entrada</label>
+                    <input
+                      type="date"
+                      value={novoPromarkosProcesso.dataentrada}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, dataentrada: e.target.value }))}
+                      className="px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground font-medium">Fluxo</label>
+                    <select
+                      value={novoPromarkosProcesso.fluxo}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, fluxo: e.target.value }))}
+                      className="px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    >
+                      <option value="Analise">Analise</option>
+                      <option value="Judicial">Judicial</option>
+                      <option value="Administrativo">Administrativo</option>
+                      <option value="Recursal">Recursal</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground font-medium">Estágio</label>
+                    <select
+                      value={novoPromarkosProcesso.estagio}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, estagio: e.target.value }))}
+                      className="px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    >
+                      <option value="Triagem">Triagem</option>
+                      <option value="Protocolo">Protocolo</option>
+                      <option value="Distribuído">Distribuído</option>
+                      <option value="Em andamento">Em andamento</option>
+                      <option value="Concluído">Concluído</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 pb-1">
+                    <input
+                      type="checkbox"
+                      id="pm-urgencia"
+                      checked={novoPromarkosProcesso.urgencia}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, urgencia: e.target.checked }))}
+                      className="w-4 h-4 accent-primary cursor-pointer"
+                    />
+                    <label htmlFor="pm-urgencia" className="text-sm font-medium cursor-pointer whitespace-nowrap">Urgência</label>
+                  </div>
                 </div>
 
-                {/* Tipo do Benefício */}
-                {novoPromarkosProcesso.beneficioid_categoria > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-semibold">Tipo do Benefício *</label>
-                    {beneficioTipos.length === 0 ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-xl bg-muted/30">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Carregando tipos...
+                {/* Observações do Processo (expandable) */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowObservacoes(v => !v)}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors"
+                  >
+                    <span className="text-lg leading-none">+</span> Observações do Processo
+                  </button>
+                  {showObservacoes ? (
+                    <textarea
+                      value={novoPromarkosProcesso.observacoes}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, observacoes: e.target.value }))}
+                      rows={3}
+                      placeholder="Observações do processo..."
+                      className="mt-2 w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background resize-none"
+                    />
+                  ) : (
+                    <div className="mt-2 p-4 border border-border rounded-lg bg-muted/20 text-sm text-muted-foreground text-center">
+                      Clique em "Observação do processo" para adicionar.
+                    </div>
+                  )}
+                </div>
+
+                {/* Fato Gerador */}
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors"
+                  >
+                    <span className="text-lg leading-none">+</span> Novo Fato Gerador
+                  </button>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground font-medium">Fato gerador</label>
+                    <input
+                      type="text"
+                      placeholder=""
+                      value={novoPromarkosProcesso.fatogerador}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, fatogerador: e.target.value }))}
+                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    />
+                  </div>
+                </div>
+
+                {/* Bottom row: Escritório + Benefício + Tipo benefício */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground font-medium">Escritório</label>
+                    <select
+                      value={novoPromarkosProcesso.escritorioid}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, escritorioid: Number(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    >
+                      <option value={0}>Selecione...</option>
+                      {empresas.map(e => (
+                        <option key={e.id} value={e.id}>{e.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground font-medium">Benefício</label>
+                    <select
+                      value={novoPromarkosProcesso.beneficioid_categoria}
+                      onChange={e => handleBeneficioCategoriaChange(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    >
+                      <option value={0}>Selecione...</option>
+                      {beneficios.map(b => (
+                        <option key={b.id} value={b.id}>{b.descricao}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground font-medium">Tipo benefício</label>
+                    {novoPromarkosProcesso.beneficioid_categoria > 0 && beneficioTipos.length === 0 ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 border rounded-lg bg-muted/30">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Carregando...
                       </div>
                     ) : (
                       <select
                         value={novoPromarkosProcesso.beneficioid}
                         onChange={e => setNovoPromarkosProcesso(p => ({ ...p, beneficioid: Number(e.target.value) }))}
-                        className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
+                        disabled={novoPromarkosProcesso.beneficioid_categoria === 0}
+                        className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background disabled:opacity-50"
                       >
-                        <option value={0}>Selecione o tipo...</option>
+                        <option value={0}>Selecione...</option>
                         {beneficioTipos.map(t => (
                           <option key={t.id} value={t.id}>{t.descricao || "(sem descrição)"}</option>
                         ))}
                       </select>
                     )}
                   </div>
-                )}
-
-                {/* Escritório */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold">Escritório *</label>
-                  <select
-                    value={novoPromarkosProcesso.escritorioid}
-                    onChange={e => setNovoPromarkosProcesso(p => ({ ...p, escritorioid: Number(e.target.value) }))}
-                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
-                  >
-                    <option value={0}>Selecione o escritório...</option>
-                    {empresas.map(e => (
-                      <option key={e.id} value={e.id}>{e.nome}</option>
-                    ))}
-                  </select>
                 </div>
 
-                {/* Data de Entrada */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold">Data de Entrada</label>
-                  <input
-                    type="date"
-                    value={novoPromarkosProcesso.dataentrada}
-                    onChange={e => setNovoPromarkosProcesso(p => ({ ...p, dataentrada: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
-                  />
+                {/* Terra Própria + INCRA + Vínculo + Nº Pasta */}
+                <div className="flex flex-wrap items-center gap-4">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={novoPromarkosProcesso.terrapropia}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, terrapropia: e.target.checked }))}
+                      className="w-4 h-4 accent-primary cursor-pointer"
+                    />
+                    Terra Própria
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={novoPromarkosProcesso.incra}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, incra: e.target.checked }))}
+                      className="w-4 h-4 accent-primary cursor-pointer"
+                    />
+                    INCRA
+                  </label>
+                  <div className="flex-1 min-w-[140px] space-y-1">
+                    <label className="text-xs text-muted-foreground font-medium">Vínculo com Te...</label>
+                    <input
+                      type="text"
+                      value={novoPromarkosProcesso.vinculoemprego}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, vinculoemprego: e.target.value }))}
+                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1 w-32">
+                    <label className="text-xs text-muted-foreground font-medium">Nº Pasta</label>
+                    <input
+                      type="text"
+                      value={novoPromarkosProcesso.numeropasta}
+                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, numeropasta: e.target.value }))}
+                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                    />
+                  </div>
                 </div>
 
-                {/* Modo */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold">Modo de Criação</label>
-                  <select
-                    value={novoPromarkosProcesso.modo}
-                    onChange={e => setNovoPromarkosProcesso(p => ({ ...p, modo: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
-                  >
-                    <option value="novo">Sempre criar novo processo</option>
-                    <option value="auto">Automático (usa existente se houver)</option>
-                    <option value="existente">Usar processo existente</option>
-                  </select>
-                </div>
-
-                {/* Urgência */}
-                <div className="flex items-center gap-3 p-3.5 rounded-xl border-2 border-border bg-background">
-                  <input
-                    type="checkbox"
-                    id="promarkos-urgencia"
-                    checked={novoPromarkosProcesso.urgencia}
-                    onChange={e => setNovoPromarkosProcesso(p => ({ ...p, urgencia: e.target.checked }))}
-                    className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
-                  />
-                  <label htmlFor="promarkos-urgencia" className="font-semibold cursor-pointer text-sm">⚡ Marcar como Urgente</label>
-                </div>
               </div>
 
-              <div className="p-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 flex-shrink-0">
-                <button type="button" onClick={() => setPromarkosProcessoModalOpen(false)} className="px-5 py-2.5 font-semibold text-muted-foreground hover:bg-muted rounded-xl transition-colors text-sm">Cancelar</button>
-                <button type="button" onClick={handleCriarPromarkosProcesso} className="px-6 py-2.5 font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 text-sm">
-                  Criar Pasta no Promarcos
+              {/* Footer */}
+              <div className="p-4 border-t border-border/50 flex justify-end gap-3 flex-shrink-0">
+                <button type="button" onClick={() => setPromarkosProcessoModalOpen(false)} className="px-5 py-2.5 font-semibold text-muted-foreground hover:bg-muted rounded-lg transition-colors text-sm">Cancelar</button>
+                <button type="button" onClick={handleCriarPromarkosProcesso} className="px-8 py-2.5 font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-lg text-sm">
+                  Salvar Processo
                 </button>
               </div>
             </motion.div>
