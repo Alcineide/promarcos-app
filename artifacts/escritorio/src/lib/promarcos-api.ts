@@ -1,10 +1,11 @@
 const PROXY_BASE = "/api/promarcos";
 
-export interface PromarkosEmpresa {
-  Id: number;
-  Nome: string;
-  CNPJ: string;
-  Status: boolean;
+export interface PromarkosEscritorio {
+  id: number;
+  nome: string;
+  sigla: string;
+  ativo: boolean | null;
+  OrigemCliente: boolean | null;
 }
 
 export interface PromarcosPessoa {
@@ -45,12 +46,14 @@ export interface PromarcosBuscaCpfResult {
   pessoas: PromarcosPessoa[];
 }
 
-export async function buscarEmpresas(): Promise<PromarkosEmpresa[]> {
+export async function buscarEscritorios(): Promise<PromarkosEscritorio[]> {
   try {
-    const res = await fetch(`${PROXY_BASE}/empresas`);
+    const res = await fetch(`${PROXY_BASE}/escritorios`);
     if (!res.ok) return [];
     const data = await res.json();
-    return Array.isArray(data) ? data.filter((e: PromarkosEmpresa) => e.Status) : [];
+    return Array.isArray(data)
+      ? data.filter((e: PromarkosEscritorio) => e.ativo !== false && !e.OrigemCliente)
+      : [];
   } catch {
     return [];
   }

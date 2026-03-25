@@ -4,9 +4,9 @@ const PROMARCOS_BASE = "https://api.onprise.com.br/api";
 
 const router: IRouter = Router();
 
-router.get("/promarcos/empresas", async (req, res) => {
+router.get("/promarcos/escritorios", async (req, res) => {
   try {
-    const upstream = await fetch(`${PROMARCOS_BASE}/empresas/buscar`);
+    const upstream = await fetch(`${PROMARCOS_BASE}/escritorios/buscartodos`);
     const data = await upstream.json();
     res.status(upstream.status).json(data);
   } catch (err) {
