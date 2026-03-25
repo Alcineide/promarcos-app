@@ -1,15 +1,20 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: API do Sistema de Cadastro de Clientes - Escritório Mendes Advocacia
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: clientes
+    description: Gerenciamento de clientes
+  - name: processos
+    description: Processos dos clientes
+  - name: anexos
+    description: Documentos anexados ao cliente
 paths:
   /healthz:
     get:
@@ -24,6 +29,237 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /clientes:
+    get:
+      operationId: listClientes
+      tags: [clientes]
+      summary: Listar clientes
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Busca por CPF ou nome
+      responses:
+        "200":
+          description: Lista de clientes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Cliente"
+    post:
+      operationId: createCliente
+      tags: [clientes]
+      summary: Cadastrar novo cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClienteInput"
+      responses:
+        "201":
+          description: Cliente criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cliente"
+        "400":
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /clientes/{id}:
+    get:
+      operationId: getCliente
+      tags: [clientes]
+      summary: Buscar cliente por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cliente encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cliente"
+        "404":
+          description: Cliente não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateCliente
+      tags: [clientes]
+      summary: Atualizar cliente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClienteInput"
+      responses:
+        "200":
+          description: Cliente atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cliente"
+        "404":
+          description: Cliente não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /clientes/{id}/processos:
+    get:
+      operationId: listProcessos
+      tags: [processos]
+      summary: Listar processos do cliente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lista de processos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Processo"
+    post:
+      operationId: createProcesso
+      tags: [processos]
+      summary: Criar processo para o cliente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProcessoInput"
+      responses:
+        "201":
+          description: Processo criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Processo"
+
+  /processos/{id}:
+    put:
+      operationId: updateProcesso
+      tags: [processos]
+      summary: Atualizar processo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProcessoInput"
+      responses:
+        "200":
+          description: Processo atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Processo"
+
+  /clientes/{id}/anexos:
+    get:
+      operationId: listAnexos
+      tags: [anexos]
+      summary: Listar anexos do cliente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lista de anexos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Anexo"
+    post:
+      operationId: createAnexo
+      tags: [anexos]
+      summary: Adicionar anexo ao cliente
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnexoInput"
+      responses:
+        "201":
+          description: Anexo adicionado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Anexo"
+
+  /anexos/{id}:
+    delete:
+      operationId: deleteAnexo
+      tags: [anexos]
+      summary: Remover anexo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Anexo removido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +270,202 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    Cliente:
+      type: object
+      properties:
+        id:
+          type: integer
+        escritorio:
+          type: string
+        cpf:
+          type: string
+        nomeCompleto:
+          type: string
+        dataNascimento:
+          type: ["string", "null"]
+        sexo:
+          type: ["string", "null"]
+        estadoCivil:
+          type: ["string", "null"]
+        rgRepresentante:
+          type: ["string", "null"]
+        orgaoEmissor:
+          type: ["string", "null"]
+        profissao:
+          type: ["string", "null"]
+        telefone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        cep:
+          type: ["string", "null"]
+        estado:
+          type: ["string", "null"]
+        cidade:
+          type: ["string", "null"]
+        logradouro:
+          type: ["string", "null"]
+        numero:
+          type: ["string", "null"]
+        complemento:
+          type: ["string", "null"]
+        bairro:
+          type: ["string", "null"]
+        observacao:
+          type: ["string", "null"]
+        pastaPath:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - escritorio
+        - cpf
+        - nomeCompleto
+        - createdAt
+        - updatedAt
+
+    CreateClienteInput:
+      type: object
+      properties:
+        escritorio:
+          type: string
+        cpf:
+          type: string
+        nomeCompleto:
+          type: string
+        dataNascimento:
+          type: ["string", "null"]
+        sexo:
+          type: ["string", "null"]
+        estadoCivil:
+          type: ["string", "null"]
+        rgRepresentante:
+          type: ["string", "null"]
+        orgaoEmissor:
+          type: ["string", "null"]
+        profissao:
+          type: ["string", "null"]
+        telefone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        cep:
+          type: ["string", "null"]
+        estado:
+          type: ["string", "null"]
+        cidade:
+          type: ["string", "null"]
+        logradouro:
+          type: ["string", "null"]
+        numero:
+          type: ["string", "null"]
+        complemento:
+          type: ["string", "null"]
+        bairro:
+          type: ["string", "null"]
+        observacao:
+          type: ["string", "null"]
+        pastaPath:
+          type: ["string", "null"]
+      required:
+        - escritorio
+        - cpf
+        - nomeCompleto
+
+    Processo:
+      type: object
+      properties:
+        id:
+          type: integer
+        clienteId:
+          type: integer
+        numero:
+          type: ["string", "null"]
+        vara:
+          type: ["string", "null"]
+        comarca:
+          type: ["string", "null"]
+        assunto:
+          type: ["string", "null"]
+        status:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - clienteId
+        - status
+        - createdAt
+        - updatedAt
+
+    CreateProcessoInput:
+      type: object
+      properties:
+        numero:
+          type: ["string", "null"]
+        vara:
+          type: ["string", "null"]
+        comarca:
+          type: ["string", "null"]
+        assunto:
+          type: ["string", "null"]
+        status:
+          type: string
+      required:
+        - status
+
+    Anexo:
+      type: object
+      properties:
+        id:
+          type: integer
+        clienteId:
+          type: integer
+        tipo:
+          type: string
+        nomeArquivo:
+          type: string
+        fileData:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - clienteId
+        - tipo
+        - nomeArquivo
+        - createdAt
+
+    CreateAnexoInput:
+      type: object
+      properties:
+        tipo:
+          type: string
+        nomeArquivo:
+          type: string
+        fileData:
+          type: ["string", "null"]
+      required:
+        - tipo
+        - nomeArquivo

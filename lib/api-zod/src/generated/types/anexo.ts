@@ -6,6 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface Anexo {
+  id: number;
+  clienteId: number;
+  tipo: string;
+  nomeArquivo: string;
+  /** @nullable */
+  fileData?: string | null;
+  createdAt: string;
 }
