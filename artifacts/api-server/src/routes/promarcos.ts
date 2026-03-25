@@ -45,9 +45,18 @@ router.post("/promarcos/salvarpessoacompleta", async (req, res) => {
 router.get("/promarcos/processos/:pessoaId", async (req, res) => {
   try {
     const { pessoaId } = req.params;
-    const upstream = await fetch(`${PROMARCOS_BASE}/processo?clienteId=${pessoaId}`);
+    const upstream = await fetch(`${PROMARCOS_BASE}/processo?clienteId=${pessoaId}`, {
+      cache: "no-store",
+    });
     const data = await upstream.json();
-    const list = Array.isArray(data) ? data : [];
+    const raw = Array.isArray(data) ? data : [];
+    const seen = new Set<unknown>();
+    const list = raw.filter((p: { id?: unknown }) => {
+      if (p?.id === undefined || seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
     res.status(200).json(list);
   } catch (err) {
     req.log.error(err);
@@ -112,6 +121,7 @@ router.post("/promarcos/processos", async (req, res) => {
     });
 
     const text = await upstream.text();
+    req.log.info({ status: upstream.status, body: text }, "Promarcos POST /processo response");
     let data: unknown;
     try { data = JSON.parse(text); } catch { data = { message: text }; }
     res.status(upstream.status).json(data);

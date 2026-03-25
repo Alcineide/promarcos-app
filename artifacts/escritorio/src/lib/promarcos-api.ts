@@ -105,7 +105,7 @@ export async function buscarPorCpf(cpf: string): Promise<PromarkosBuscaCpfResult
 
 export async function buscarProcessos(pessoaId: number): Promise<PromarkosProcesso[]> {
   try {
-    const res = await fetch(`${PROXY_BASE}/processos/${pessoaId}`);
+    const res = await fetch(`${PROXY_BASE}/processos/${pessoaId}`, { cache: "no-store" });
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? data : [];
