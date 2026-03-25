@@ -3,10 +3,10 @@ import { useLocation, useParams, useSearch, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { buscarPorCpf, buscarEscritorios, salvarPessoa, type PromarcosPessoa, type PromarkosProcesso, type PromarkosEscritorio } from "@/lib/promarcos-api";
+import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo } from "@/lib/promarcos-api";
 import { 
   User, Phone, MapPin, FileText, FolderOpen, Save, 
-  ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase
+  ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase, Loader2, RefreshCw, ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Layout } from "@/components/layout";
@@ -19,6 +19,7 @@ import {
   useUpdateCliente,
   useListProcessos,
   useCreateProcesso,
+  useUpdateProcesso,
   useListAnexos,
   useCreateAnexo,
   useDeleteAnexo,
@@ -65,6 +66,14 @@ export default function ClientForm() {
 
   const [activeTab, setActiveTab] = useState<"cadastro" | "processos" | "documentos">("cadastro");
   const [promarkosPreloaded, setPromarkosPreloaded] = useState(false);
+  const [promarcosCodigo, setPromarcosCodigo] = useState<number | null>(null);
+  const [promarkosProcessos, setPromarkosProcessos] = useState<PromarkosProcesso[]>([]);
+  const [loadingPromarkosProcessos, setLoadingPromarkosProcessos] = useState(false);
+  const [beneficios, setBeneficios] = useState<PromarkosBeneficio[]>([]);
+  const [beneficioTipos, setBeneficioTipos] = useState<PromarkosBeneficioTipo[]>([]);
+  const [isPromarkosProcessoModalOpen, setPromarkosProcessoModalOpen] = useState(false);
+  const emptyPromarkosProcesso = { escritorioid: 0, beneficioid_categoria: 0, beneficioid: 0, dataentrada: new Date().toISOString().split("T")[0], urgencia: false, modo: "novo" };
+  const [novoPromarkosProcesso, setNovoPromarkosProcesso] = useState<typeof emptyPromarkosProcesso>(emptyPromarkosProcesso);
 
   // --- Promarcos escritórios ---
   const [empresas, setEmpresas] = useState<PromarkosEscritorio[]>([]);
@@ -84,6 +93,7 @@ export default function ClientForm() {
 
   const { data: processos } = useListProcessos(clientId, { query: { enabled: isEditing }});
   const createProcesso = useCreateProcesso();
+  const updateProcesso = useUpdateProcesso();
 
   const { data: anexos } = useListAnexos(clientId, { query: { enabled: isEditing }});
   const createAnexo = useCreateAnexo();
@@ -98,8 +108,27 @@ export default function ClientForm() {
   useEffect(() => {
     if (clientData) {
       reset(clientData as ClientFormData);
+      if (clientData.promarcosCodigo) {
+        setPromarcosCodigo(clientData.promarcosCodigo);
+      }
     }
   }, [clientData, reset]);
+
+  const fetchPromarkosProcessos = async (codigo: number) => {
+    setLoadingPromarkosProcessos(true);
+    try {
+      const lista = await buscarProcessos(codigo);
+      setPromarkosProcessos(lista);
+    } finally {
+      setLoadingPromarkosProcessos(false);
+    }
+  };
+
+  useEffect(() => {
+    if (promarcosCodigo) {
+      fetchPromarkosProcessos(promarcosCodigo);
+    }
+  }, [promarcosCodigo]);
 
   // --- Auto-load from URL ?cpf= param ---
   useEffect(() => {
@@ -111,6 +140,7 @@ export default function ClientForm() {
         if (result.existe && result.pessoas.length > 0) {
           const p = result.pessoas[0];
           setCpfCheckResult({ existe: true, pessoa: p });
+          setPromarcosCodigo(p.codigo);
           const nascFormatted = p.nascimento
             ? (() => {
                 const d = new Date(p.nascimento!);
@@ -166,8 +196,10 @@ export default function ClientForm() {
         const result = await buscarPorCpf(cpfNums);
         if (result.existe && result.pessoas.length > 0) {
           setCpfCheckResult({ existe: true, pessoa: result.pessoas[0] });
+          setPromarcosCodigo(result.pessoas[0].codigo);
         } else {
           setCpfCheckResult({ existe: false });
+          setPromarcosCodigo(null);
         }
       } catch {
         setCpfCheckResult(null);
@@ -249,11 +281,12 @@ export default function ClientForm() {
         toast({ title: "CPF já cadastrado no Promarcos", description: `Já existe: ${cpfCheckResult?.pessoa?.razao_social || ""}`, variant: "destructive" });
       }
 
+      const dataWithPromarcos = { ...data, promarcosCodigo: promarcosCodigo ?? undefined };
       if (isEditing) {
-        await updateClient.mutateAsync({ id: clientId, data });
+        await updateClient.mutateAsync({ id: clientId, data: dataWithPromarcos });
         toast({ title: "Sucesso", description: "Cliente atualizado com sucesso!" });
       } else {
-        const newClient = await createClient.mutateAsync({ data });
+        const newClient = await createClient.mutateAsync({ data: dataWithPromarcos });
         toast({ title: "Sucesso", description: promarcosResult.sucesso ? "Cliente salvo no Promarcos e no sistema!" : "Cliente salvo no sistema (Promarcos: verifique)." });
         setLocation(`/cliente/${newClient.id}`);
       }
@@ -317,6 +350,51 @@ export default function ClientForm() {
       queryClient.invalidateQueries({ queryKey: [`/api/clientes/${clientId}/processos`] });
     } catch {
       toast({ title: "Erro", description: "Falha ao salvar processo", variant: "destructive" });
+    }
+  };
+
+  const openPromarkosProcessoModal = async () => {
+    const escritorioDefault = empresas[0]?.id ?? 0;
+    setNovoPromarkosProcesso({ ...emptyPromarkosProcesso, escritorioid: escritorioDefault });
+    setBeneficioTipos([]);
+    const bens = await buscarBeneficios();
+    setBeneficios(bens);
+    setPromarkosProcessoModalOpen(true);
+  };
+
+  const handleBeneficioCategoriaChange = async (beneficioid: number) => {
+    setNovoPromarkosProcesso(p => ({ ...p, beneficioid_categoria: beneficioid, beneficioid: 0 }));
+    setBeneficioTipos([]);
+    if (beneficioid > 0) {
+      const tipos = await buscarBeneficioTipos(beneficioid);
+      setBeneficioTipos(tipos);
+    }
+  };
+
+  const handleCriarPromarkosProcesso = async () => {
+    if (!promarcosCodigo) return;
+    if (!novoPromarkosProcesso.beneficioid || !novoPromarkosProcesso.escritorioid) {
+      toast({ title: "Atenção", description: "Selecione o benefício e o escritório.", variant: "destructive" });
+      return;
+    }
+    try {
+      const result = await criarProcessoPromarcos({
+        escritorioid: novoPromarkosProcesso.escritorioid,
+        beneficioid: novoPromarkosProcesso.beneficioid,
+        pessoaid: promarcosCodigo,
+        dataentrada: novoPromarkosProcesso.dataentrada,
+        urgencia: novoPromarkosProcesso.urgencia,
+        modo: novoPromarkosProcesso.modo,
+      });
+      if (result.sucesso) {
+        toast({ title: "Processo criado!", description: "Nova pasta aberta no Promarcos com sucesso." });
+        setPromarkosProcessoModalOpen(false);
+        fetchPromarkosProcessos(promarcosCodigo);
+      } else {
+        toast({ title: "Erro", description: result.mensagem || "Falha ao criar processo no Promarcos.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Erro", description: "Falha ao criar processo no Promarcos.", variant: "destructive" });
     }
   };
 
@@ -597,82 +675,110 @@ export default function ClientForm() {
 
           {activeTab === "processos" && isEditing && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-              <div className="flex justify-between items-center bg-card p-6 rounded-2xl shadow-sm border border-border/50">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Briefcase className="w-5 h-5 text-primary" /> Pastas / Processos do Cliente
-                </h2>
-                <button 
-                  type="button"
-                  onClick={() => openProcessoModal()}
-                  className="px-4 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-lg shadow-primary/20"
-                >
-                  + Nova Pasta
-                </button>
+
+              {/* Promarcos Processes Section */}
+              <div className="bg-card rounded-2xl shadow-sm border border-border/50 overflow-hidden">
+                <div className="flex justify-between items-center p-5 border-b border-border/50 bg-primary/5">
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    <Briefcase className="w-5 h-5 text-primary" /> Pastas no Promarcos
+                  </h2>
+                  <div className="flex gap-2">
+                    {promarcosCodigo && (
+                      <button
+                        type="button"
+                        onClick={() => fetchPromarkosProcessos(promarcosCodigo)}
+                        className="px-3 py-2 border border-border rounded-xl text-sm font-medium hover:bg-muted transition-colors flex items-center gap-1.5"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+                      </button>
+                    )}
+                    {promarcosCodigo && (
+                      <button
+                        type="button"
+                        onClick={openPromarkosProcessoModal}
+                        className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-lg shadow-primary/20 text-sm"
+                      >
+                        + Nova Pasta
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {!promarcosCodigo ? (
+                  <div className="p-8 text-center">
+                    <Briefcase className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">CPF não vinculado ao Promarcos. Salve o cliente primeiro para sincronizar.</p>
+                  </div>
+                ) : loadingPromarkosProcessos ? (
+                  <div className="p-8 flex justify-center">
+                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                  </div>
+                ) : promarkosProcessos.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <Briefcase className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground font-medium">Nenhum processo encontrado no Promarcos para este cliente.</p>
+                    <button type="button" onClick={openPromarkosProcessoModal} className="mt-4 px-5 py-2 bg-primary/10 text-primary font-semibold rounded-xl hover:bg-primary/20 transition-colors text-sm">
+                      + Abrir Nova Pasta no Promarcos
+                    </button>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/50">
+                    {promarkosProcessos.map(p => {
+                      const etapaAtual = p.analista?.[0];
+                      const areaStatus = p.AreaAtual && p.StatusAtual ? `${p.AreaAtual}: ${p.StatusAtual}` : p.StatusAtual || p.AreaAtual || "—";
+                      const isJud = p.AreaAtual?.toUpperCase().includes("JUD");
+                      const isUrgent = p.urgencia;
+                      const dataEntradaFmt = p.dataentrada ? new Date(p.dataentrada).toLocaleDateString("pt-BR") : "—";
+                      return (
+                        <div key={p.id} className="p-5 hover:bg-muted/30 transition-colors">
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                              <h3 className="font-bold text-base">{p.TipoBeneficio || p.beneficio}</h3>
+                              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                {p.numeropasta && (
+                                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary text-primary-foreground">
+                                    Pasta {p.numeropasta}
+                                  </span>
+                                )}
+                                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border/60">
+                                  {p.escritorio || p.sigla}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                              <span className={cn(
+                                "px-2.5 py-0.5 rounded-full text-xs font-bold",
+                                isJud ? "bg-red-500 text-white" :
+                                p.StatusAtual?.includes("Aguardando") ? "bg-amber-100 text-amber-700 border border-amber-200" :
+                                "bg-blue-100 text-blue-700 border border-blue-200"
+                              )}>
+                                {areaStatus}
+                              </span>
+                              {isUrgent && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">⚡ Urgente</span>}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-sm">
+                            <div><span className="font-medium text-muted-foreground">Entrada: </span>{dataEntradaFmt}</div>
+                            <div><span className="font-medium text-muted-foreground">Nº Processo: </span>{p.numeroprocesso || "—"}</div>
+                            {p.nomefatogerador && <div className="md:col-span-1"><span className="font-medium text-muted-foreground">Fato gerador: </span>{p.nomefatogerador}</div>}
+                            {p.matricula && <div><span className="font-medium text-muted-foreground">Matrícula: </span>{p.matricula}</div>}
+                          </div>
+                          {etapaAtual && (
+                            <div className="mt-2.5 p-2.5 bg-muted/50 rounded-lg text-xs">
+                              <span className="font-semibold text-muted-foreground">Etapa atual: </span>
+                              <span>{etapaAtual.Etapa}</span>
+                              {etapaAtual.NomeAnalista && <span className="ml-2 text-muted-foreground/70">• {etapaAtual.NomeAnalista}</span>}
+                              {etapaAtual.PrazoEtapa && <span className="ml-2 text-amber-600 font-medium">• Prazo: {new Date(etapaAtual.PrazoEtapa).toLocaleDateString("pt-BR")}</span>}
+                              {etapaAtual.Comentario && <div className="mt-1 text-muted-foreground italic">{etapaAtual.Comentario}</div>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {processos?.length === 0 ? (
-                <div className="bg-card p-12 text-center rounded-2xl border border-border/50 border-dashed">
-                  <Briefcase className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                  <p className="text-muted-foreground font-medium">Nenhum processo cadastrado para este cliente.</p>
-                  <button type="button" onClick={() => openProcessoModal()} className="mt-4 px-6 py-2.5 bg-primary/10 text-primary font-semibold rounded-xl hover:bg-primary/20 transition-colors">+ Abrir Nova Pasta</button>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {processos?.map(p => (
-                    <div key={p.id} className="bg-card rounded-2xl shadow-sm border border-border/50 overflow-hidden hover:border-primary/30 transition-colors">
-                      {/* Card Header */}
-                      <div className="p-5 border-b border-border/50">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="font-bold text-lg uppercase">{p.beneficio} {p.tipoBeneficio}</h3>
-                            {p.numeroPasta && (
-                              <span className="inline-flex items-center mt-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary text-primary-foreground">
-                                Pasta {p.numeroPasta}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex gap-2 flex-shrink-0">
-                            <span className={cn(
-                              "px-3 py-1 rounded-full text-xs font-bold",
-                              p.status === "Ativo" ? "bg-green-100 text-green-700 border border-green-200" :
-                              p.status === "JUD:Protocolado" ? "bg-red-500 text-white" :
-                              p.status === "Suspenso" ? "bg-amber-100 text-amber-700 border border-amber-200" :
-                              p.status === "Arquivado" ? "bg-slate-100 text-slate-600 border border-slate-200" :
-                              "bg-blue-100 text-blue-700 border border-blue-200"
-                            )}>
-                              {p.status}
-                            </span>
-                            {p.urgencia && <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">⚡ Urgente</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Card Body */}
-                      <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
-                        <div><span className="font-semibold text-muted-foreground">Fato gerador: </span>{p.fatoGerador || "Sem fato gerador vinculado"}</div>
-                        <div><span className="font-semibold text-muted-foreground">Matrícula: </span>{p.matricula || "Sem matrícula"}</div>
-                        <div><span className="font-semibold text-muted-foreground">Data fato gerador: </span>{p.dataFatoGerador || "Não informada"}</div>
-                        <div><span className="font-semibold text-muted-foreground">Número processo: </span>{p.numeroProcesso || "Sem número"}</div>
-                        <div><span className="font-semibold text-muted-foreground">Data entrada: </span>{p.dataEntrada || "—"}</div>
-                        <div><span className="font-semibold text-muted-foreground">Escritório: </span>{p.escritorioProcesso || "—"}</div>
-                        {p.estagio && <div><span className="font-semibold text-muted-foreground">Estágio: </span>{p.estagio}</div>}
-                        {p.fluxo && <div><span className="font-semibold text-muted-foreground">Fluxo: </span>{p.fluxo}</div>}
-                        {p.cadastradoPor && <div className="md:col-span-2 text-xs text-muted-foreground pt-1 border-t border-border/50">Cadastrado em {new Date(p.createdAt).toLocaleDateString('pt-BR')} por {p.cadastradoPor}</div>}
-                      </div>
-
-                      {/* Card Actions */}
-                      <div className="px-5 pb-5 flex flex-wrap gap-3">
-                        <button type="button" onClick={() => generateDoc("Folha de Rosto")} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2">
-                          <FileText className="w-4 h-4" /> Gerar Folha de Rosto
-                        </button>
-                        <button type="button" onClick={() => openProcessoModal(p)} className="px-3 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
-                          ✏️ Editar
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </motion.div>
           )}
 
@@ -944,6 +1050,122 @@ export default function ClientForm() {
               <div className="p-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 flex-shrink-0">
                 <button type="button" onClick={() => setProcessoModalOpen(false)} className="px-5 py-2.5 font-semibold text-muted-foreground hover:bg-muted rounded-xl transition-colors">Cancelar</button>
                 <button type="button" onClick={handleCreateProcesso} className="px-8 py-2.5 font-bold bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors shadow-lg">Salvar Processo</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Nova Pasta no Promarcos */}
+      <AnimatePresence>
+        {isPromarkosProcessoModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-card w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-border max-h-[90vh] flex flex-col">
+              <div className="p-5 border-b border-border/50 bg-primary/5 flex-shrink-0">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-primary" />
+                  Abrir Nova Pasta no Promarcos
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">O processo será criado diretamente no sistema Promarcos.</p>
+              </div>
+
+              <div className="p-5 space-y-4 overflow-y-auto">
+                {/* Benefício Categoria */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">Categoria do Benefício *</label>
+                  <select
+                    value={novoPromarkosProcesso.beneficioid_categoria}
+                    onChange={e => handleBeneficioCategoriaChange(Number(e.target.value))}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
+                  >
+                    <option value={0}>Selecione...</option>
+                    {beneficios.map(b => (
+                      <option key={b.id} value={b.id}>{b.descricao}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tipo do Benefício */}
+                {novoPromarkosProcesso.beneficioid_categoria > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Tipo do Benefício *</label>
+                    {beneficioTipos.length === 0 ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-xl bg-muted/30">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Carregando tipos...
+                      </div>
+                    ) : (
+                      <select
+                        value={novoPromarkosProcesso.beneficioid}
+                        onChange={e => setNovoPromarkosProcesso(p => ({ ...p, beneficioid: Number(e.target.value) }))}
+                        className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
+                      >
+                        <option value={0}>Selecione o tipo...</option>
+                        {beneficioTipos.map(t => (
+                          <option key={t.id} value={t.id}>{t.descricao || "(sem descrição)"}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+
+                {/* Escritório */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">Escritório *</label>
+                  <select
+                    value={novoPromarkosProcesso.escritorioid}
+                    onChange={e => setNovoPromarkosProcesso(p => ({ ...p, escritorioid: Number(e.target.value) }))}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
+                  >
+                    <option value={0}>Selecione o escritório...</option>
+                    {empresas.map(e => (
+                      <option key={e.id} value={e.id}>{e.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Data de Entrada */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">Data de Entrada</label>
+                  <input
+                    type="date"
+                    value={novoPromarkosProcesso.dataentrada}
+                    onChange={e => setNovoPromarkosProcesso(p => ({ ...p, dataentrada: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
+                  />
+                </div>
+
+                {/* Modo */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">Modo de Criação</label>
+                  <select
+                    value={novoPromarkosProcesso.modo}
+                    onChange={e => setNovoPromarkosProcesso(p => ({ ...p, modo: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background"
+                  >
+                    <option value="novo">Sempre criar novo processo</option>
+                    <option value="auto">Automático (usa existente se houver)</option>
+                    <option value="existente">Usar processo existente</option>
+                  </select>
+                </div>
+
+                {/* Urgência */}
+                <div className="flex items-center gap-3 p-3.5 rounded-xl border-2 border-border bg-background">
+                  <input
+                    type="checkbox"
+                    id="promarkos-urgencia"
+                    checked={novoPromarkosProcesso.urgencia}
+                    onChange={e => setNovoPromarkosProcesso(p => ({ ...p, urgencia: e.target.checked }))}
+                    className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+                  />
+                  <label htmlFor="promarkos-urgencia" className="font-semibold cursor-pointer text-sm">⚡ Marcar como Urgente</label>
+                </div>
+              </div>
+
+              <div className="p-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 flex-shrink-0">
+                <button type="button" onClick={() => setPromarkosProcessoModalOpen(false)} className="px-5 py-2.5 font-semibold text-muted-foreground hover:bg-muted rounded-xl transition-colors text-sm">Cancelar</button>
+                <button type="button" onClick={handleCriarPromarkosProcesso} className="px-6 py-2.5 font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 text-sm">
+                  Criar Pasta no Promarcos
+                </button>
               </div>
             </motion.div>
           </div>

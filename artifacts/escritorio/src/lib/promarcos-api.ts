@@ -8,7 +8,7 @@ export interface PromarkosEscritorio {
   OrigemCliente: boolean | null;
 }
 
-export interface PromarcosPessoa {
+export interface PromarkosPessoa {
   codigo: number;
   razao_social: string;
   cpf: string;
@@ -35,15 +35,50 @@ export interface PromarcosPessoa {
 }
 
 export interface PromarkosProcesso {
-  ProcessoId: number;
+  id: number;
+  pessoaid: number;
   numeroprocesso: string;
+  situacao: string;
   dataentrada: string | null;
+  escritorio: string;
+  escritorioid: number;
   beneficio: string;
+  beneficioid: number;
+  usuario: string;
+  urgencia: boolean;
+  nome: string;
+  cpf: string;
+  numeropasta: number | null;
+  sigla: string;
+  TipoBeneficio: string;
+  AreaAtual: string;
+  StatusAtual: string;
+  CreatedAt: string;
+  UpdatedAt: string;
+  nomefatogerador: string | null;
+  datafatogerador: string | null;
+  matricula: string | null;
+  analista: Array<{
+    NomeAnalista: string;
+    Etapa: string;
+    PrazoEtapa: string | null;
+    Comentario: string;
+  }>;
 }
 
-export interface PromarcosBuscaCpfResult {
+export interface PromarkosBeneficio {
+  id: number;
+  descricao: string;
+}
+
+export interface PromarkosBeneficioTipo {
+  id: number;
+  descricao: string;
+}
+
+export interface PromarkosBuscaCpfResult {
   existe: boolean;
-  pessoas: PromarcosPessoa[];
+  pessoas: PromarkosPessoa[];
 }
 
 export async function buscarEscritorios(): Promise<PromarkosEscritorio[]> {
@@ -59,12 +94,68 @@ export async function buscarEscritorios(): Promise<PromarkosEscritorio[]> {
   }
 }
 
-export async function buscarPorCpf(cpf: string): Promise<PromarcosBuscaCpfResult> {
+export async function buscarPorCpf(cpf: string): Promise<PromarkosBuscaCpfResult> {
   const cpfNumerico = cpf.replace(/\D/g, "");
   if (cpfNumerico.length !== 11) return { existe: false, pessoas: [] };
   const res = await fetch(`${PROXY_BASE}/buscarcpf/${cpfNumerico}`);
   if (!res.ok) return { existe: false, pessoas: [] };
   return res.json();
+}
+
+export async function buscarProcessos(pessoaId: number): Promise<PromarkosProcesso[]> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/processos/${pessoaId}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function buscarBeneficios(): Promise<PromarkosBeneficio[]> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/beneficios`);
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
+export async function buscarBeneficioTipos(beneficioId: number): Promise<PromarkosBeneficioTipo[]> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/beneficiotipo/${beneficioId}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function criarProcessoPromarcos(data: {
+  escritorioid: number;
+  beneficioid: number;
+  pessoaid: number;
+  dataentrada: string;
+  urgencia: boolean;
+  modo: string;
+}): Promise<{ sucesso: boolean; id?: number; mensagem?: string }> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/processos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json() as Record<string, unknown>;
+    if (!res.ok) {
+      return { sucesso: false, mensagem: (result?.message as string) || "Erro ao criar processo" };
+    }
+    return { sucesso: true, id: result?.processo_id as number | undefined };
+  } catch {
+    return { sucesso: false, mensagem: "Erro ao conectar com o Promarcos" };
+  }
 }
 
 export interface SalvarPessoaPayload {
@@ -91,7 +182,7 @@ export interface SalvarPessoaPayload {
     ativo: boolean;
     codempresa: number;
   };
-  Processos: any[];
+  Processos: unknown[];
 }
 
 export async function salvarPessoa(payload: SalvarPessoaPayload): Promise<{ sucesso: boolean; codigo?: number; mensagem?: string; duplicado?: boolean }> {

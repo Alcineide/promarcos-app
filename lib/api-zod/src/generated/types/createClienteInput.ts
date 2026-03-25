@@ -44,4 +44,6 @@ export interface CreateClienteInput {
   observacao?: string | null;
   /** @nullable */
   pastaPath?: string | null;
+  /** @nullable */
+  promarcosCodigo?: number | null;
 }

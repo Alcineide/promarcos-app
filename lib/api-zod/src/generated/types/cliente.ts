@@ -45,6 +45,8 @@ export interface Cliente {
   observacao?: string | null;
   /** @nullable */
   pastaPath?: string | null;
+  /** @nullable */
+  promarcosCodigo?: number | null;
   createdAt: string;
   updatedAt: string;
 }

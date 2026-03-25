@@ -44,6 +44,7 @@ export const ListClientesResponseItem = zod.object({
   bairro: zod.string().nullish(),
   observacao: zod.string().nullish(),
   pastaPath: zod.string().nullish(),
+  promarcosCodigo: zod.number().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -73,6 +74,7 @@ export const CreateClienteBody = zod.object({
   bairro: zod.string().nullish(),
   observacao: zod.string().nullish(),
   pastaPath: zod.string().nullish(),
+  promarcosCodigo: zod.number().nullish(),
 });
 
 /**
@@ -104,6 +106,7 @@ export const GetClienteResponse = zod.object({
   bairro: zod.string().nullish(),
   observacao: zod.string().nullish(),
   pastaPath: zod.string().nullish(),
+  promarcosCodigo: zod.number().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -136,6 +139,7 @@ export const UpdateClienteBody = zod.object({
   bairro: zod.string().nullish(),
   observacao: zod.string().nullish(),
   pastaPath: zod.string().nullish(),
+  promarcosCodigo: zod.number().nullish(),
 });
 
 export const UpdateClienteResponse = zod.object({
@@ -160,6 +164,7 @@ export const UpdateClienteResponse = zod.object({
   bairro: zod.string().nullish(),
   observacao: zod.string().nullish(),
   pastaPath: zod.string().nullish(),
+  promarcosCodigo: zod.number().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
