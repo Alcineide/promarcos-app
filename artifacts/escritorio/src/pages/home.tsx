@@ -70,25 +70,55 @@ export default function Home() {
 
           {/* Promarcos result when CPF typed */}
           {promarkosResult?.existe && promarkosResult.pessoa && (
-            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-xl bg-blue-50 border-2 border-blue-200">
-              <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-2">Encontrado no Promarcos</p>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <p className="font-bold text-blue-900 text-lg">{promarkosResult.pessoa.razao_social}</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-blue-700">
-                    <span className="flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {promarkosResult.pessoa.cpf}</span>
-                    {promarkosResult.pessoa.cidade && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {promarkosResult.pessoa.cidade}/{promarkosResult.pessoa.estado}</span>}
-                    {promarkosResult.pessoa.telefone1 && <span>Tel: {promarkosResult.pessoa.telefone1}</span>}
-                    {promarkosResult.pessoa.profissao && <span>Profissão: {promarkosResult.pessoa.profissao}</span>}
-                    {promarkosResult.pessoa.estado_civil && <span>Civil: {promarkosResult.pessoa.estado_civil}</span>}
-                  </div>
+            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl bg-blue-50 border-2 border-blue-200 overflow-hidden">
+              <div className="flex items-center justify-between gap-3 p-4 border-b border-blue-200">
+                <div>
+                  <p className="text-xs font-bold text-blue-500 uppercase tracking-wider">Cadastro encontrado no Promarcos</p>
+                  <p className="font-bold text-blue-900 text-xl mt-0.5">{promarkosResult.pessoa.razao_social}</p>
                 </div>
                 <Link
                   href={`/novo?cpf=${promarkosResult.pessoa.cpf.replace(/\D/g, "")}`}
-                  className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+                  className="flex-shrink-0 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors"
                 >
                   Abrir Cadastro
                 </Link>
+              </div>
+              <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2 text-sm text-blue-800">
+                <div><span className="font-semibold text-blue-500 text-xs uppercase">CPF</span><p>{promarkosResult.pessoa.cpf}</p></div>
+                {promarkosResult.pessoa.nascimento && (
+                  <div><span className="font-semibold text-blue-500 text-xs uppercase">Nascimento</span>
+                  <p>{new Date(promarkosResult.pessoa.nascimento).toLocaleDateString("pt-BR")}</p></div>
+                )}
+                {promarkosResult.pessoa.sexo && (
+                  <div><span className="font-semibold text-blue-500 text-xs uppercase">Sexo</span><p>{promarkosResult.pessoa.sexo === "M" ? "Masculino" : "Feminino"}</p></div>
+                )}
+                {promarkosResult.pessoa.estado_civil && (
+                  <div><span className="font-semibold text-blue-500 text-xs uppercase">Estado Civil</span><p>{promarkosResult.pessoa.estado_civil}</p></div>
+                )}
+                {promarkosResult.pessoa.profissao && (
+                  <div><span className="font-semibold text-blue-500 text-xs uppercase">Profissão</span><p>{promarkosResult.pessoa.profissao}</p></div>
+                )}
+                {promarkosResult.pessoa.rg && (
+                  <div><span className="font-semibold text-blue-500 text-xs uppercase">RG</span><p>{promarkosResult.pessoa.rg}</p></div>
+                )}
+                {promarkosResult.pessoa.telefone1 && (
+                  <div><span className="font-semibold text-blue-500 text-xs uppercase">Telefone</span><p>{promarkosResult.pessoa.telefone1}</p></div>
+                )}
+                {promarkosResult.pessoa.email1 && (
+                  <div><span className="font-semibold text-blue-500 text-xs uppercase">E-mail</span><p>{promarkosResult.pessoa.email1}</p></div>
+                )}
+                {(promarkosResult.pessoa.logradouro || promarkosResult.pessoa.cidade) && (
+                  <div className="md:col-span-2">
+                    <span className="font-semibold text-blue-500 text-xs uppercase">Endereço</span>
+                    <p>
+                      {[promarkosResult.pessoa.logradouro, promarkosResult.pessoa.numero, promarkosResult.pessoa.bairro].filter(Boolean).join(", ")}
+                      {promarkosResult.pessoa.cidade && ` — ${promarkosResult.pessoa.cidade}/${promarkosResult.pessoa.estado}`}
+                    </p>
+                  </div>
+                )}
+                {promarkosResult.pessoa.cep && (
+                  <div><span className="font-semibold text-blue-500 text-xs uppercase">CEP</span><p>{promarkosResult.pessoa.cep}</p></div>
+                )}
               </div>
             </motion.div>
           )}

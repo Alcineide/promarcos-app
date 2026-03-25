@@ -4,6 +4,17 @@ const PROMARCOS_BASE = "https://api.onprise.com.br/api";
 
 const router: IRouter = Router();
 
+router.get("/promarcos/empresas", async (req, res) => {
+  try {
+    const upstream = await fetch(`${PROMARCOS_BASE}/empresas/buscar`);
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json([]);
+  }
+});
+
 router.get("/promarcos/buscarcpf/:cpf", async (req, res) => {
   try {
     const { cpf } = req.params;

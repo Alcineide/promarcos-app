@@ -3,7 +3,7 @@ import { useLocation, useParams, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { buscarPorCpf, salvarPessoa, type PromarcosPessoa, type PromarkosProcesso } from "@/lib/promarcos-api";
+import { buscarPorCpf, buscarEmpresas, salvarPessoa, type PromarcosPessoa, type PromarkosProcesso, type PromarkosEmpresa } from "@/lib/promarcos-api";
 import { 
   User, Phone, MapPin, FileText, FolderOpen, Save, 
   ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase
@@ -62,6 +62,12 @@ export default function ClientForm() {
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<"cadastro" | "processos" | "documentos">("cadastro");
+
+  // --- Promarcos companies ---
+  const [empresas, setEmpresas] = useState<PromarkosEmpresa[]>([]);
+  useEffect(() => {
+    buscarEmpresas().then(setEmpresas);
+  }, []);
 
   // --- Promarcos CPF check state ---
   const [cpfCheckResult, setCpfCheckResult] = useState<{ existe: boolean; pessoa?: PromarcosPessoa } | null>(null);
@@ -175,7 +181,7 @@ export default function ClientForm() {
           profissao: data.profissao || "",
           observacoes: data.observacao || "",
           ativo: true,
-          codempresa: 4,
+          codempresa: empresas.find(e => e.Nome === data.escritorio)?.Id ?? 1,
         },
         Processos: [],
       };
@@ -345,8 +351,30 @@ export default function ClientForm() {
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               {/* Escritório */}
               <div className="bg-card p-6 md:p-8 rounded-2xl shadow-sm border border-border/50">
-                <div className="max-w-md">
-                  <FormInput form={formCtx} label="Escritório Responsável *" name="escritorio" placeholder="Ex: Matriz, Filial..." />
+                <div className="max-w-md space-y-1.5">
+                  <label className="text-sm font-semibold text-foreground/80">Escritório Responsável *</label>
+                  <select
+                    {...register("escritorio")}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200",
+                      errors.escritorio && "border-destructive"
+                    )}
+                  >
+                    <option value="">Selecione o escritório...</option>
+                    {empresas.length > 0
+                      ? empresas.map(e => (
+                          <option key={e.Id} value={e.Nome}>{e.Nome}</option>
+                        ))
+                      : (
+                        <>
+                          <option value="MENDES ADVOCACIA">MENDES ADVOCACIA</option>
+                          <option value="Mendes Cabral Advocacia">Mendes Cabral Advocacia</option>
+                          <option value="MOURA ADVOGADOS ASSOCIADOS">MOURA ADVOGADOS ASSOCIADOS</option>
+                        </>
+                      )
+                    }
+                  </select>
+                  {errors.escritorio && <span className="text-xs text-destructive font-medium">{errors.escritorio.message}</span>}
                 </div>
               </div>
 
