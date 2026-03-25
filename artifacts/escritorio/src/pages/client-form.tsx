@@ -3,7 +3,7 @@ import { useLocation, useParams, useSearch, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo } from "@/lib/promarcos-api";
+import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, gerarFolhaRosto, uploadArquivoPromarcos, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo } from "@/lib/promarcos-api";
 import { 
   User, Phone, MapPin, FileText, FolderOpen, Save, 
   ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase, Loader2, RefreshCw, ExternalLink
@@ -89,7 +89,10 @@ export default function ClientForm() {
     incra: false,
     vinculoemprego: "",
     numeropasta: "",
+    percentualIndicador: 0,
+    percentualSocio: 0,
   };
+  const [gerandoFolha, setGerandoFolha] = useState<number | null>(null);
   const [novoPromarkosProcesso, setNovoPromarkosProcesso] = useState<typeof emptyPromarkosProcesso>(emptyPromarkosProcesso);
 
   // --- Promarcos escritórios ---
@@ -411,7 +414,16 @@ export default function ClientForm() {
         dataentrada: novoPromarkosProcesso.dataentrada,
         urgencia: novoPromarkosProcesso.urgencia,
         modo: novoPromarkosProcesso.modo,
-      });
+        numeroprocesso: novoPromarkosProcesso.numeroprocesso,
+        fluxo: novoPromarkosProcesso.fluxo,
+        estagio: novoPromarkosProcesso.estagio,
+        observacoes: novoPromarkosProcesso.observacoes,
+        fatogerador: novoPromarkosProcesso.fatogerador,
+        numeropasta: novoPromarkosProcesso.numeropasta,
+        terrapropia: novoPromarkosProcesso.terrapropia,
+        incra: novoPromarkosProcesso.incra,
+        vinculoemprego: novoPromarkosProcesso.vinculoemprego,
+      } as Parameters<typeof criarProcessoPromarcos>[0]);
       if (result.sucesso) {
         toast({ title: "Processo criado!", description: "Nova pasta aberta no Promarcos com sucesso." });
         setPromarkosProcessoModalOpen(false);
@@ -421,6 +433,36 @@ export default function ClientForm() {
       }
     } catch {
       toast({ title: "Erro", description: "Falha ao criar processo no Promarcos.", variant: "destructive" });
+    }
+  };
+
+  const handleGerarFolhaRosto = async (processo: PromarkosProcesso) => {
+    if (!promarcosCodigo) return;
+    setGerandoFolha(processo.id);
+    try {
+      const result = await gerarFolhaRosto(promarcosCodigo);
+      if (!result.sucesso || !result.blob) {
+        toast({ title: "Erro", description: result.mensagem || "Falha ao gerar folha de rosto.", variant: "destructive" });
+        return;
+      }
+      const url = URL.createObjectURL(result.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.fileName || `folha_rosto_${promarcosCodigo}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      const upload = await uploadArquivoPromarcos(promarcosCodigo, result.blob, result.fileName || `folha_rosto_${promarcosCodigo}.pdf`);
+      if (upload.sucesso) {
+        toast({ title: "Folha de Rosto gerada!", description: "Documento gerado e enviado ao Promarcos com sucesso." });
+      } else {
+        toast({ title: "Gerada localmente", description: "PDF baixado. Falha ao enviar ao Promarcos: " + (upload.mensagem || "erro desconhecido"), variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Erro", description: "Falha ao gerar folha de rosto.", variant: "destructive" });
+    } finally {
+      setGerandoFolha(null);
     }
   };
 
@@ -775,8 +817,17 @@ export default function ClientForm() {
                             </div>
                           </div>
                           <div className="px-4 pb-2">
-                            <button type="button" className="w-full py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
-                              Gerar folha de Rosto
+                            <button
+                              type="button"
+                              disabled={gerandoFolha === p.id}
+                              onClick={() => handleGerarFolhaRosto(p)}
+                              className="w-full py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {gerandoFolha === p.id ? (
+                                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</>
+                              ) : (
+                                <>Gerar folha de Rosto</>
+                              )}
                             </button>
                           </div>
                           <div className="px-4 py-3 flex items-center justify-between border-t border-border/50">
@@ -1195,104 +1246,125 @@ export default function ClientForm() {
                   >
                     <span className="text-lg leading-none">+</span> Novo Fato Gerador
                   </button>
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground font-medium">Fato gerador</label>
+                  <div className="relative">
+                    <label className="absolute -top-2 left-3 text-xs text-muted-foreground bg-card px-1">Fato gerador</label>
                     <input
                       type="text"
-                      placeholder=""
                       value={novoPromarkosProcesso.fatogerador}
                       onChange={e => setNovoPromarkosProcesso(p => ({ ...p, fatogerador: e.target.value }))}
-                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                      className="w-full px-3 py-3 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
                     />
                   </div>
+                </div>
+
+                {/* Indicadores */}
+                <div className="border border-border rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-base font-semibold text-primary">Indicadores</span>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <label className="absolute -top-2 left-2 text-[10px] text-muted-foreground bg-card px-0.5">Percentual de referência (%)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={novoPromarkosProcesso.percentualIndicador}
+                          onChange={e => setNovoPromarkosProcesso(p => ({ ...p, percentualIndicador: Number(e.target.value) }))}
+                          className="w-28 px-2 py-2 border border-border rounded text-sm focus:border-primary outline-none bg-background"
+                        />
+                      </div>
+                      <button type="button" className="px-3 py-2 border border-border rounded text-sm font-medium hover:bg-muted transition-colors">Distribuir</button>
+                      <button type="button" className="px-3 py-2 bg-primary text-primary-foreground rounded text-sm font-semibold hover:bg-primary/90 transition-colors flex items-center gap-1">
+                        <span className="text-base leading-none">+</span> Novo
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Nenhum indicador cadastrado.</p>
+                </div>
+
+                {/* Sócios / Parceiro */}
+                <div className="border border-border rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-base font-semibold text-primary">Sócios/ Parceiro</span>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <label className="absolute -top-2 left-2 text-[10px] text-muted-foreground bg-card px-0.5">Percentual de referência (%)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={novoPromarkosProcesso.percentualSocio}
+                          onChange={e => setNovoPromarkosProcesso(p => ({ ...p, percentualSocio: Number(e.target.value) }))}
+                          className="w-28 px-2 py-2 border border-border rounded text-sm focus:border-primary outline-none bg-background"
+                        />
+                      </div>
+                      <button type="button" disabled className="px-3 py-2 border border-border rounded text-sm font-medium opacity-40 cursor-not-allowed">Distribuir</button>
+                      <button type="button" className="px-3 py-2 bg-primary text-primary-foreground rounded text-sm font-semibold hover:bg-primary/90 transition-colors flex items-center gap-1">
+                        <span className="text-base leading-none">+</span> Novo
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Nenhum sócio cadastrado.</p>
                 </div>
 
                 {/* Bottom row: Escritório + Benefício + Tipo benefício */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground font-medium">Escritório</label>
-                    <select
-                      value={novoPromarkosProcesso.escritorioid}
-                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, escritorioid: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
-                    >
-                      <option value={0}>Selecione...</option>
-                      {empresas.map(e => (
-                        <option key={e.id} value={e.id}>{e.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground font-medium">Benefício</label>
-                    <select
-                      value={novoPromarkosProcesso.beneficioid_categoria}
-                      onChange={e => handleBeneficioCategoriaChange(Number(e.target.value))}
-                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
-                    >
-                      <option value={0}>Selecione...</option>
-                      {beneficios.map(b => (
-                        <option key={b.id} value={b.id}>{b.descricao}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground font-medium">Tipo benefício</label>
-                    {novoPromarkosProcesso.beneficioid_categoria > 0 && beneficioTipos.length === 0 ? (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 border rounded-lg bg-muted/30">
-                        <Loader2 className="w-3 h-3 animate-spin" /> Carregando...
-                      </div>
-                    ) : (
+                <div className="border border-border rounded-lg p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="relative">
+                      <label className="absolute -top-2 left-2 text-[10px] text-muted-foreground bg-card px-0.5">Escritório</label>
                       <select
-                        value={novoPromarkosProcesso.beneficioid}
-                        onChange={e => setNovoPromarkosProcesso(p => ({ ...p, beneficioid: Number(e.target.value) }))}
-                        disabled={novoPromarkosProcesso.beneficioid_categoria === 0}
-                        className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background disabled:opacity-50"
+                        value={novoPromarkosProcesso.escritorioid}
+                        onChange={e => setNovoPromarkosProcesso(p => ({ ...p, escritorioid: Number(e.target.value) }))}
+                        className="w-full px-3 py-2.5 border border-border rounded text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
                       >
                         <option value={0}>Selecione...</option>
-                        {beneficioTipos.map(t => (
-                          <option key={t.id} value={t.id}>{t.descricao || "(sem descrição)"}</option>
+                        {empresas.map(e => (
+                          <option key={e.id} value={e.id}>{e.nome}</option>
                         ))}
                       </select>
-                    )}
+                    </div>
+                    <div className="relative">
+                      <label className="absolute -top-2 left-2 text-[10px] text-muted-foreground bg-card px-0.5">Benefício</label>
+                      <select
+                        value={novoPromarkosProcesso.beneficioid_categoria}
+                        onChange={e => handleBeneficioCategoriaChange(Number(e.target.value))}
+                        className="w-full px-3 py-2.5 border border-border rounded text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                      >
+                        <option value={0}>Selecione...</option>
+                        {beneficios.map(b => (
+                          <option key={b.id} value={b.id}>{b.descricao}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="relative">
+                      <label className="absolute -top-2 left-2 text-[10px] text-muted-foreground bg-card px-0.5">Tipo benefício</label>
+                      {novoPromarkosProcesso.beneficioid_categoria > 0 && beneficioTipos.length === 0 ? (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground p-2.5 border border-border rounded bg-muted/30">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Carregando...
+                        </div>
+                      ) : (
+                        <select
+                          value={novoPromarkosProcesso.beneficioid}
+                          onChange={e => setNovoPromarkosProcesso(p => ({ ...p, beneficioid: Number(e.target.value) }))}
+                          disabled={novoPromarkosProcesso.beneficioid_categoria === 0}
+                          className="w-full px-3 py-2.5 border border-border rounded text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background disabled:opacity-50"
+                        >
+                          <option value={0}>Selecione...</option>
+                          {beneficioTipos.map(t => (
+                            <option key={t.id} value={t.id}>{t.descricao || "(sem descrição)"}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
-                </div>
-
-                {/* Terra Própria + INCRA + Vínculo + Nº Pasta */}
-                <div className="flex flex-wrap items-center gap-4">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={novoPromarkosProcesso.terrapropia}
-                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, terrapropia: e.target.checked }))}
-                      className="w-4 h-4 accent-primary cursor-pointer"
-                    />
-                    Terra Própria
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={novoPromarkosProcesso.incra}
-                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, incra: e.target.checked }))}
-                      className="w-4 h-4 accent-primary cursor-pointer"
-                    />
-                    INCRA
-                  </label>
-                  <div className="flex-1 min-w-[140px] space-y-1">
-                    <label className="text-xs text-muted-foreground font-medium">Vínculo com Te...</label>
-                    <input
-                      type="text"
-                      value={novoPromarkosProcesso.vinculoemprego}
-                      onChange={e => setNovoPromarkosProcesso(p => ({ ...p, vinculoemprego: e.target.value }))}
-                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
-                    />
-                  </div>
-                  <div className="space-y-1 w-32">
-                    <label className="text-xs text-muted-foreground font-medium">Nº Pasta</label>
+                  {/* Nº Pasta */}
+                  <div className="mt-3 w-36 relative">
+                    <label className="absolute -top-2 left-2 text-[10px] text-muted-foreground bg-card px-0.5">Nº Pasta</label>
                     <input
                       type="text"
                       value={novoPromarkosProcesso.numeropasta}
                       onChange={e => setNovoPromarkosProcesso(p => ({ ...p, numeropasta: e.target.value }))}
-                      className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
+                      className="w-full px-3 py-2.5 border border-border rounded text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none bg-background"
                     />
                   </div>
                 </div>

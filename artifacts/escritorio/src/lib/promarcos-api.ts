@@ -141,6 +141,15 @@ export async function criarProcessoPromarcos(data: {
   dataentrada: string;
   urgencia: boolean;
   modo: string;
+  numeroprocesso?: string;
+  fluxo?: string;
+  estagio?: string;
+  observacoes?: string;
+  fatogerador?: string;
+  numeropasta?: string;
+  terrapropia?: boolean;
+  incra?: boolean;
+  vinculoemprego?: string;
 }): Promise<{ sucesso: boolean; id?: number; mensagem?: string }> {
   try {
     const res = await fetch(`${PROXY_BASE}/processos`, {
@@ -196,4 +205,40 @@ export async function salvarPessoa(payload: SalvarPessoaPayload): Promise<{ suce
     return { sucesso: false, mensagem: text };
   }
   return res.json();
+}
+
+export async function gerarFolhaRosto(pessoaId: number): Promise<{ sucesso: boolean; blob?: Blob; fileName?: string; mensagem?: string }> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/folharosto/${pessoaId}`);
+    if (!res.ok) {
+      const text = await res.text();
+      return { sucesso: false, mensagem: text || `Erro ${res.status}` };
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename="?([^";\s]+)"?/);
+    const fileName = match?.[1] || `folha_rosto_${pessoaId}.pdf`;
+    return { sucesso: true, blob, fileName };
+  } catch (err) {
+    return { sucesso: false, mensagem: "Erro ao conectar com o Promarcos" };
+  }
+}
+
+export async function uploadArquivoPromarcos(pessoaCodigo: number, blob: Blob, fileName: string): Promise<{ sucesso: boolean; mensagem?: string }> {
+  try {
+    const arrayBuffer = await blob.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const res = await fetch(`${PROXY_BASE}/arquivo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pessoaCodigo, fileName, fileBase64: base64, tipo: "Folha de Rosto", nome: "Folha de Rosto" }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      return { sucesso: false, mensagem: text || `Erro ${res.status}` };
+    }
+    return { sucesso: true };
+  } catch (err) {
+    return { sucesso: false, mensagem: "Erro ao enviar arquivo ao Promarcos" };
+  }
 }
