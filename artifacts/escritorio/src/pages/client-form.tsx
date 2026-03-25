@@ -110,6 +110,15 @@ export default function ClientForm() {
       reset(clientData as ClientFormData);
       if (clientData.promarcosCodigo) {
         setPromarcosCodigo(clientData.promarcosCodigo);
+      } else if (clientData.cpf) {
+        const cpfNums = clientData.cpf.replace(/\D/g, "");
+        if (cpfNums.length === 11) {
+          buscarPorCpf(cpfNums).then(result => {
+            if (result.existe && result.pessoas.length > 0) {
+              setPromarcosCodigo(result.pessoas[0].codigo);
+            }
+          });
+        }
       }
     }
   }, [clientData, reset]);
