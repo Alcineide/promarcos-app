@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Layout } from "@/components/layout";
-import { cn, formatCEP, formatCPF, formatPhone } from "@/lib/utils";
+import { cn, formatCEP, formatCPF, formatPhone, formatDate } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
   useGetCliente, 
@@ -29,21 +29,22 @@ const clientSchema = z.object({
   escritorio: z.string().min(1, "Obrigatório"),
   cpf: z.string().min(11, "CPF inválido"),
   nomeCompleto: z.string().min(3, "Nome muito curto"),
-  dataNascimento: z.string().optional().nullable(),
-  sexo: z.string().optional().nullable(),
-  estadoCivil: z.string().optional().nullable(),
-  rgRepresentante: z.string().optional().nullable(),
-  orgaoEmissor: z.string().optional().nullable(),
-  profissao: z.string().optional().nullable(),
-  telefone: z.string().optional().nullable(),
+  dataNascimento: z.string().min(1, "Data de nascimento obrigatória"),
+  sexo: z.string().min(1, "Obrigatório"),
+  estadoCivil: z.string().min(1, "Obrigatório"),
+  rgRepresentante: z.string().min(1, "Obrigatório"),
+  orgaoEmissor: z.string().min(1, "Obrigatório"),
+  profissao: z.string().min(1, "Obrigatório"),
+  telefone: z.string().min(1, "Obrigatório"),
+  telefone2: z.string().optional().nullable(),
   email: z.string().email("E-mail inválido").or(z.literal("")).optional().nullable(),
-  cep: z.string().optional().nullable(),
-  estado: z.string().optional().nullable(),
-  cidade: z.string().optional().nullable(),
-  logradouro: z.string().optional().nullable(),
-  numero: z.string().optional().nullable(),
+  cep: z.string().min(8, "CEP inválido"),
+  estado: z.string().min(1, "Obrigatório"),
+  cidade: z.string().min(1, "Obrigatório"),
+  logradouro: z.string().min(1, "Obrigatório"),
+  numero: z.string().min(1, "Obrigatório"),
   complemento: z.string().optional().nullable(),
-  bairro: z.string().optional().nullable(),
+  bairro: z.string().min(1, "Obrigatório"),
   observacao: z.string().optional().nullable(),
   pastaPath: z.string().optional().nullable(),
 });
@@ -203,24 +204,34 @@ export default function ClientForm() {
     return <Layout><div className="flex justify-center p-20"><div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div></Layout>;
   }
 
-  const InputField = ({ label, name, maskFn, ...props }: any) => (
-    <div className="space-y-1.5">
-      <label className="text-sm font-semibold text-foreground/80">{label}</label>
-      <input
-        {...register(name)}
-        onChange={(e) => {
-          if (maskFn) e.target.value = maskFn(e.target.value);
-          register(name).onChange(e);
-        }}
-        className={cn(
-          "w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200",
-          errors[name] && "border-destructive focus:border-destructive focus:ring-destructive/10"
-        )}
-        {...props}
-      />
-      {errors[name] && <span className="text-xs text-destructive font-medium">{(errors[name] as any).message}</span>}
-    </div>
-  );
+  const InputField = ({ label, name, maskFn, optional, ...props }: any) => {
+    const { onChange: rhfOnChange, ...rest } = register(name);
+    return (
+      <div className="space-y-1.5">
+        <label className="text-sm font-semibold text-foreground/80">
+          {label}
+          {optional && <span className="text-muted-foreground font-normal ml-1">(opcional)</span>}
+        </label>
+        <input
+          {...rest}
+          onChange={(e) => {
+            if (maskFn) {
+              const masked = maskFn(e.target.value);
+              setValue(name, masked, { shouldValidate: false, shouldDirty: true });
+            } else {
+              rhfOnChange(e);
+            }
+          }}
+          className={cn(
+            "w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200",
+            errors[name] && "border-destructive focus:border-destructive focus:ring-destructive/10"
+          )}
+          {...props}
+        />
+        {errors[name] && <span className="text-xs text-destructive font-medium">{(errors[name] as any).message}</span>}
+      </div>
+    );
+  };
 
   return (
     <Layout>
@@ -295,21 +306,22 @@ export default function ClientForm() {
                   <div className="lg:col-span-2">
                     <InputField label="Nome Completo *" name="nomeCompleto" placeholder="Nome do cliente" />
                   </div>
-                  <InputField label="Data de Nascimento" name="dataNascimento" type="date" />
+                  <InputField label="Data de Nascimento *" name="dataNascimento" maskFn={formatDate} placeholder="DD/MM/AAAA" type="text" inputMode="numeric" />
                   
                   <div className="space-y-1.5">
-                    <label className="text-sm font-semibold text-foreground/80">Sexo</label>
-                    <select {...register("sexo")} className="w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10">
+                    <label className="text-sm font-semibold text-foreground/80">Sexo *</label>
+                    <select {...register("sexo")} className={cn("w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10", errors.sexo && "border-destructive")}>
                       <option value="">Selecione...</option>
                       <option value="Masculino">Masculino</option>
                       <option value="Feminino">Feminino</option>
                       <option value="Outro">Outro</option>
                     </select>
+                    {errors.sexo && <span className="text-xs text-destructive font-medium">Obrigatório</span>}
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-semibold text-foreground/80">Estado Civil</label>
-                    <select {...register("estadoCivil")} className="w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10">
+                    <label className="text-sm font-semibold text-foreground/80">Estado Civil *</label>
+                    <select {...register("estadoCivil")} className={cn("w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10", errors.estadoCivil && "border-destructive")}>
                       <option value="">Selecione...</option>
                       <option value="Solteiro">Solteiro(a)</option>
                       <option value="Casado">Casado(a)</option>
@@ -317,12 +329,13 @@ export default function ClientForm() {
                       <option value="Viúvo">Viúvo(a)</option>
                       <option value="União Estável">União Estável</option>
                     </select>
+                    {errors.estadoCivil && <span className="text-xs text-destructive font-medium">Obrigatório</span>}
                   </div>
 
-                  <InputField label="RG/Representante" name="rgRepresentante" />
-                  <InputField label="Órgão Emissor" name="orgaoEmissor" />
+                  <InputField label="RG/Representante *" name="rgRepresentante" />
+                  <InputField label="Órgão Emissor *" name="orgaoEmissor" />
                   <div className="lg:col-span-2">
-                    <InputField label="Profissão" name="profissao" />
+                    <InputField label="Profissão *" name="profissao" />
                   </div>
                 </div>
               </div>
@@ -332,9 +345,10 @@ export default function ClientForm() {
                 <h2 className="text-xl font-bold flex items-center gap-2 mb-6">
                   <Phone className="w-5 h-5 text-primary" /> Contato
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <InputField label="Telefone / Celular" name="telefone" maskFn={formatPhone} placeholder="(00) 00000-0000" />
-                  <InputField label="E-mail" name="email" type="email" placeholder="cliente@email.com" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <InputField label="Telefone / Celular *" name="telefone" maskFn={formatPhone} placeholder="(00) 00000-0000" />
+                  <InputField label="2º Telefone" name="telefone2" maskFn={formatPhone} placeholder="(00) 00000-0000" optional />
+                  <InputField label="E-mail" name="email" type="email" placeholder="cliente@email.com" optional />
                 </div>
               </div>
 
@@ -344,9 +358,9 @@ export default function ClientForm() {
                   <MapPin className="w-5 h-5 text-primary" /> Endereço
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <InputField label="CEP" name="cep" maskFn={formatCEP} placeholder="00000-000" />
+                  <InputField label="CEP *" name="cep" maskFn={formatCEP} placeholder="00000-000" />
                   <div className="space-y-1.5">
-                    <label className="text-sm font-semibold text-foreground/80">Estado (UF)</label>
+                    <label className="text-sm font-semibold text-foreground/80">Estado (UF) *</label>
                     <select {...register("estado")} className="w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10">
                       <option value="">UF</option>
                       <option value="AC">AC - Acre</option>
@@ -379,17 +393,17 @@ export default function ClientForm() {
                     </select>
                   </div>
                   <div className="md:col-span-2">
-                    <InputField label="Cidade" name="cidade" />
+                    <InputField label="Cidade *" name="cidade" />
                   </div>
                   
                   <div className="md:col-span-2">
-                    <InputField label="Logradouro" name="logradouro" placeholder="Rua, Avenida..." />
+                    <InputField label="Logradouro *" name="logradouro" placeholder="Rua, Avenida..." />
                   </div>
-                  <InputField label="Número" name="numero" />
-                  <InputField label="Complemento" name="complemento" />
+                  <InputField label="Número *" name="numero" />
+                  <InputField label="Complemento" name="complemento" optional />
                   
                   <div className="md:col-span-2">
-                    <InputField label="Bairro" name="bairro" />
+                    <InputField label="Bairro *" name="bairro" />
                   </div>
                   <div className="md:col-span-4 space-y-1.5">
                     <label className="text-sm font-semibold text-foreground/80">Observações de Endereço</label>

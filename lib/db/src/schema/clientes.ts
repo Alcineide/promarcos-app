@@ -14,6 +14,7 @@ export const clientesTable = pgTable("clientes", {
   orgaoEmissor: text("orgao_emissor"),
   profissao: text("profissao"),
   telefone: text("telefone"),
+  telefone2: text("telefone2"),
   email: text("email"),
   cep: text("cep"),
   estado: text("estado"),
