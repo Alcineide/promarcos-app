@@ -158,6 +158,12 @@ export default function ClientForm() {
     }
   }, [clientData, reset]);
 
+  useEffect(() => {
+    if (clientData?.escritorio && empresas.length > 0) {
+      setValue("escritorio", clientData.escritorio);
+    }
+  }, [clientData?.escritorio, empresas, setValue]);
+
   const fetchPromarkosProcessos = async (codigo: number) => {
     setLoadingPromarkosProcessos(true);
     try {
