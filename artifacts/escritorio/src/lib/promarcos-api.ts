@@ -1,4 +1,4 @@
-const BASE_URL = "https://api.onprise.com.br/api";
+const PROXY_BASE = "/api/promarcos";
 
 export interface PromarcosPessoa {
   codigo: number;
@@ -41,19 +41,9 @@ export interface PromarcosBuscaCpfResult {
 export async function buscarPorCpf(cpf: string): Promise<PromarcosBuscaCpfResult> {
   const cpfNumerico = cpf.replace(/\D/g, "");
   if (cpfNumerico.length !== 11) return { existe: false, pessoas: [] };
-  const res = await fetch(`${BASE_URL}/pessoas/buscarcpf/${cpfNumerico}`);
+  const res = await fetch(`${PROXY_BASE}/buscarcpf/${cpfNumerico}`);
   if (!res.ok) return { existe: false, pessoas: [] };
   return res.json();
-}
-
-export async function buscarProcessosPessoa(pessoaId: number): Promise<PromarkosProcesso[]> {
-  try {
-    const res = await fetch(`${BASE_URL}/pessoas/buscartotal`);
-    if (!res.ok) return [];
-    return [];
-  } catch {
-    return [];
-  }
 }
 
 export interface SalvarPessoaPayload {
@@ -84,7 +74,7 @@ export interface SalvarPessoaPayload {
 }
 
 export async function salvarPessoa(payload: SalvarPessoaPayload): Promise<{ sucesso: boolean; codigo?: number; mensagem?: string; duplicado?: boolean }> {
-  const res = await fetch(`${BASE_URL}/pessoas/salvarpessoacompleta`, {
+  const res = await fetch(`${PROXY_BASE}/salvarpessoacompleta`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
