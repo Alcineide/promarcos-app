@@ -452,15 +452,21 @@ export default function ClientForm() {
       setEditingPromarkosProcesso(processoToEdit);
       const matchedBeneficio = bens.find(b => processoToEdit.beneficio.toLowerCase().includes(b.descricao.toLowerCase()));
       const beneficioCatId = matchedBeneficio?.id ?? 0;
+      let tipoId = 0;
       if (beneficioCatId > 0) {
         const tipos = await buscarBeneficioTipos(beneficioCatId);
         setBeneficioTipos(tipos);
+        const categoryName = matchedBeneficio?.descricao ?? "";
+        const tipoDescPart = (processoToEdit.TipoBeneficio || processoToEdit.beneficio).replace(categoryName, "").trim();
+        const matchedTipo = tipos.find(t => t.descricao.toLowerCase() === tipoDescPart.toLowerCase())
+          ?? tipos.find(t => (processoToEdit.TipoBeneficio || "").toLowerCase().includes(t.descricao.toLowerCase()));
+        tipoId = matchedTipo?.id ?? 0;
       }
       setNovoPromarkosProcesso({
         ...emptyPromarkosProcesso,
         escritorioid: processoToEdit.escritorioid,
-        beneficioid_categoria: matchedBeneficio?.id ?? 0,
-        beneficioid: processoToEdit.beneficioid,
+        beneficioid_categoria: beneficioCatId,
+        beneficioid: tipoId,
         dataentrada: processoToEdit.dataentrada ? processoToEdit.dataentrada.split("T")[0] : new Date().toISOString().split("T")[0],
         urgencia: processoToEdit.urgencia,
         modo: "existente",

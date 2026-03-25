@@ -141,7 +141,7 @@ export async function editarProcessoPromarcos(processoId: number, data: {
   pessoaid: number;
   dataentrada: string;
   urgencia: boolean;
-  modo: string;
+  modo?: string;
   numeroprocesso?: string;
   fluxo?: string;
   estagio?: string;
