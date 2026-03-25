@@ -35,8 +35,8 @@ const clientSchema = z.object({
   dataNascimento: z.string().min(1, "Data de nascimento obrigatória"),
   sexo: z.string().min(1, "Obrigatório"),
   estadoCivil: z.string().min(1, "Obrigatório"),
-  rgRepresentante: z.string().min(1, "Obrigatório"),
-  orgaoEmissor: z.string().min(1, "Obrigatório"),
+  rgRepresentante: z.string().optional().nullable(),
+  orgaoEmissor: z.string().optional().nullable(),
   profissao: z.string().min(1, "Obrigatório"),
   telefone: z.string().min(1, "Obrigatório"),
   telefone2: z.string().optional().nullable(),
@@ -842,8 +842,8 @@ export default function ClientForm() {
                     {errors.estadoCivil && <span className="text-xs text-destructive font-medium">Obrigatório</span>}
                   </div>
 
-                  <FormInput form={formCtx} label="RG/Representante *" name="rgRepresentante" />
-                  <FormInput form={formCtx} label="Órgão Emissor *" name="orgaoEmissor" />
+                  <FormInput form={formCtx} label="RG/Representante" name="rgRepresentante" />
+                  <FormInput form={formCtx} label="Órgão Emissor" name="orgaoEmissor" />
                   <div className="lg:col-span-2">
                     <FormInput form={formCtx} label="Profissão *" name="profissao" />
                   </div>
