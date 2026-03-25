@@ -121,6 +121,50 @@ router.post("/promarcos/processos", async (req, res) => {
   }
 });
 
+router.put("/promarcos/processos/:processoId", async (req, res) => {
+  try {
+    const { processoId } = req.params;
+    const { escritorioid, beneficioid, pessoaid, dataentrada, urgencia, modo,
+            numeroprocesso, fluxo, estagio, observacoes, fatogerador,
+            numeropasta, terrapropia, incra, vinculoemprego } = req.body;
+
+    const payload: Record<string, unknown> = {
+      escritorioid: Number(escritorioid),
+      beneficioid: Number(beneficioid),
+      pessoaid: Number(pessoaid),
+      dataentrada: dataentrada || new Date().toISOString().split("T")[0],
+      valorprocesso: 0,
+      usuariocadastro: "1",
+      urgencia: Boolean(urgencia),
+      modo: modo || "existente",
+      GerarFluxo: false,
+    };
+    if (numeroprocesso !== undefined) payload.numeroprocesso = String(numeroprocesso);
+    if (fluxo !== undefined) payload.fluxo = String(fluxo);
+    if (estagio !== undefined) payload.estagio = String(estagio);
+    if (observacoes !== undefined) payload.observacoes = String(observacoes);
+    if (fatogerador !== undefined) payload.fatogerador = String(fatogerador);
+    if (numeropasta !== undefined && numeropasta !== "") payload.numeropasta = Number(numeropasta);
+    if (terrapropia !== undefined) payload.terrapropia = Boolean(terrapropia);
+    if (incra !== undefined) payload.incra = Boolean(incra);
+    if (vinculoemprego !== undefined) payload.vinculoemprego = String(vinculoemprego);
+
+    const upstream = await fetch(`${PROMARCOS_BASE}/processo/edit/${processoId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await upstream.text();
+    let data: unknown;
+    try { data = JSON.parse(text); } catch { data = { message: text }; }
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json({ sucesso: false, mensagem: "Erro ao editar processo no Promarcos" });
+  }
+});
+
 router.get("/promarcos/folharosto/:pessoaId", async (req, res) => {
   try {
     const { pessoaId } = req.params;

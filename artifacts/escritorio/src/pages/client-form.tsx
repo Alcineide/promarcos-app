@@ -3,7 +3,7 @@ import { useLocation, useParams, useSearch, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, gerarFolhaRosto, uploadArquivoPromarcos, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo } from "@/lib/promarcos-api";
+import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, editarProcessoPromarcos, gerarFolhaRosto, uploadArquivoPromarcos, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo } from "@/lib/promarcos-api";
 import { 
   User, Phone, MapPin, FileText, FolderOpen, Save, 
   ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase, Loader2, RefreshCw, ExternalLink
@@ -72,6 +72,7 @@ export default function ClientForm() {
   const [beneficios, setBeneficios] = useState<PromarkosBeneficio[]>([]);
   const [beneficioTipos, setBeneficioTipos] = useState<PromarkosBeneficioTipo[]>([]);
   const [isPromarkosProcessoModalOpen, setPromarkosProcessoModalOpen] = useState(false);
+  const [editingPromarkosProcesso, setEditingPromarkosProcesso] = useState<PromarkosProcesso | null>(null);
   const [showObservacoes, setShowObservacoes] = useState(false);
   const emptyPromarkosProcesso = {
     escritorioid: 0,
@@ -382,12 +383,36 @@ export default function ClientForm() {
     }
   };
 
-  const openPromarkosProcessoModal = async () => {
+  const openPromarkosProcessoModal = async (processoToEdit?: PromarkosProcesso) => {
     const escritorioDefault = empresas[0]?.id ?? 0;
-    setNovoPromarkosProcesso({ ...emptyPromarkosProcesso, escritorioid: escritorioDefault });
-    setBeneficioTipos([]);
     const bens = await buscarBeneficios();
     setBeneficios(bens);
+    setBeneficioTipos([]);
+    if (processoToEdit) {
+      setEditingPromarkosProcesso(processoToEdit);
+      const matchedBeneficio = bens.find(b => processoToEdit.beneficio.toLowerCase().includes(b.descricao.toLowerCase()));
+      const beneficioCatId = matchedBeneficio?.id ?? 0;
+      if (beneficioCatId > 0) {
+        const tipos = await buscarBeneficioTipos(beneficioCatId);
+        setBeneficioTipos(tipos);
+      }
+      setNovoPromarkosProcesso({
+        ...emptyPromarkosProcesso,
+        escritorioid: processoToEdit.escritorioid,
+        beneficioid_categoria: matchedBeneficio?.id ?? 0,
+        beneficioid: processoToEdit.beneficioid,
+        dataentrada: processoToEdit.dataentrada ? processoToEdit.dataentrada.split("T")[0] : new Date().toISOString().split("T")[0],
+        urgencia: processoToEdit.urgencia,
+        modo: "existente",
+        numeroprocesso: processoToEdit.numeroprocesso || "",
+        numeropasta: processoToEdit.numeropasta ? String(processoToEdit.numeropasta) : "",
+        fatogerador: processoToEdit.nomefatogerador || "",
+      });
+    } else {
+      setEditingPromarkosProcesso(null);
+      setNovoPromarkosProcesso({ ...emptyPromarkosProcesso, escritorioid: escritorioDefault });
+    }
+    setShowObservacoes(false);
     setPromarkosProcessoModalOpen(true);
   };
 
@@ -407,7 +432,7 @@ export default function ClientForm() {
       return;
     }
     try {
-      const result = await criarProcessoPromarcos({
+      const payload = {
         escritorioid: novoPromarkosProcesso.escritorioid,
         beneficioid: novoPromarkosProcesso.beneficioid,
         pessoaid: promarcosCodigo,
@@ -423,16 +448,31 @@ export default function ClientForm() {
         terrapropia: novoPromarkosProcesso.terrapropia,
         incra: novoPromarkosProcesso.incra,
         vinculoemprego: novoPromarkosProcesso.vinculoemprego,
-      } as Parameters<typeof criarProcessoPromarcos>[0]);
-      if (result.sucesso) {
-        toast({ title: "Processo criado!", description: "Nova pasta aberta no Promarcos com sucesso." });
-        setPromarkosProcessoModalOpen(false);
-        fetchPromarkosProcessos(promarcosCodigo);
+      } as Parameters<typeof criarProcessoPromarcos>[0];
+
+      let result: { sucesso: boolean; mensagem?: string };
+      if (editingPromarkosProcesso) {
+        result = await editarProcessoPromarcos(editingPromarkosProcesso.id, payload);
+        if (result.sucesso) {
+          toast({ title: "Processo atualizado!", description: "As alterações foram salvas no Promarcos." });
+          setPromarkosProcessoModalOpen(false);
+          setEditingPromarkosProcesso(null);
+          fetchPromarkosProcessos(promarcosCodigo);
+        } else {
+          toast({ title: "Erro", description: result.mensagem || "Falha ao atualizar processo.", variant: "destructive" });
+        }
       } else {
-        toast({ title: "Erro", description: result.mensagem || "Falha ao criar processo no Promarcos.", variant: "destructive" });
+        result = await criarProcessoPromarcos(payload);
+        if (result.sucesso) {
+          toast({ title: "Processo criado!", description: "Nova pasta aberta no Promarcos com sucesso." });
+          setPromarkosProcessoModalOpen(false);
+          fetchPromarkosProcessos(promarcosCodigo);
+        } else {
+          toast({ title: "Erro", description: result.mensagem || "Falha ao criar processo no Promarcos.", variant: "destructive" });
+        }
       }
     } catch {
-      toast({ title: "Erro", description: "Falha ao criar processo no Promarcos.", variant: "destructive" });
+      toast({ title: "Erro", description: "Falha ao salvar processo no Promarcos.", variant: "destructive" });
     }
   };
 
@@ -763,7 +803,7 @@ export default function ClientForm() {
                     {promarcosCodigo && (
                       <button
                         type="button"
-                        onClick={openPromarkosProcessoModal}
+                        onClick={() => openPromarkosProcessoModal()}
                         className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-lg shadow-primary/20 text-sm"
                       >
                         + Novo Processo
@@ -785,7 +825,7 @@ export default function ClientForm() {
                   <div className="p-8 text-center">
                     <Briefcase className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
                     <p className="text-sm text-muted-foreground font-medium">Nenhum processo encontrado no Promarcos para este cliente.</p>
-                    <button type="button" onClick={openPromarkosProcessoModal} className="mt-4 px-5 py-2 bg-primary/10 text-primary font-semibold rounded-xl hover:bg-primary/20 transition-colors text-sm">
+                    <button type="button" onClick={() => openPromarkosProcessoModal()} className="mt-4 px-5 py-2 bg-primary/10 text-primary font-semibold rounded-xl hover:bg-primary/20 transition-colors text-sm">
                       + Novo Processo no Promarcos
                     </button>
                   </div>
@@ -843,7 +883,7 @@ export default function ClientForm() {
                             ) : <span />}
                             <div className="flex items-center gap-1">
                               {p.urgencia && <span className="text-red-500 font-bold text-xs mr-1">⚡</span>}
-                              <button type="button" className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground">
+                              <button type="button" onClick={() => openPromarkosProcessoModal(p)} className="p-1.5 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground" title="Editar processo">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                               </button>
                               <button type="button" className="p-1.5 hover:bg-muted rounded-lg transition-colors text-blue-600 hover:text-blue-700">
@@ -1149,7 +1189,7 @@ export default function ClientForm() {
                 <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Briefcase className="w-4 h-4 text-primary" />
                 </div>
-                <h3 className="text-base font-bold">Novo / Editar Processo</h3>
+                <h3 className="text-base font-bold">{editingPromarkosProcesso ? `Editar Processo #${editingPromarkosProcesso.numeropasta ?? editingPromarkosProcesso.id}` : "Novo Processo"}</h3>
               </div>
 
               <div className="p-5 space-y-4 overflow-y-auto">
@@ -1279,7 +1319,18 @@ export default function ClientForm() {
                       </button>
                     </div>
                   </div>
-                  <p className="text-sm text-muted-foreground">Nenhum indicador cadastrado.</p>
+                  {editingPromarkosProcesso && editingPromarkosProcesso.Indicadores && editingPromarkosProcesso.Indicadores.length > 0 ? (
+                    <ul className="space-y-1">
+                      {editingPromarkosProcesso.Indicadores.map(ind => (
+                        <li key={ind.id} className="flex items-center justify-between text-sm py-1 border-b border-border/40 last:border-0">
+                          <span className="font-medium text-foreground">{ind.Nome}</span>
+                          <span className="text-xs text-muted-foreground">#{ind.id}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhum indicador cadastrado.</p>
+                  )}
                 </div>
 
                 {/* Sócios / Parceiro */}
@@ -1375,7 +1426,7 @@ export default function ClientForm() {
               <div className="p-4 border-t border-border/50 flex justify-end gap-3 flex-shrink-0">
                 <button type="button" onClick={() => setPromarkosProcessoModalOpen(false)} className="px-5 py-2.5 font-semibold text-muted-foreground hover:bg-muted rounded-lg transition-colors text-sm">Cancelar</button>
                 <button type="button" onClick={handleCriarPromarkosProcesso} className="px-8 py-2.5 font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-lg text-sm">
-                  Salvar Processo
+                  {editingPromarkosProcesso ? "Salvar Alterações" : "Criar Processo"}
                 </button>
               </div>
             </motion.div>

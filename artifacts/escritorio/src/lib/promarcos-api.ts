@@ -64,6 +64,7 @@ export interface PromarkosProcesso {
     PrazoEtapa: string | null;
     Comentario: string;
   }>;
+  Indicadores: Array<{ id: number; Nome: string }>;
 }
 
 export interface PromarkosBeneficio {
@@ -131,6 +132,40 @@ export async function buscarBeneficioTipos(beneficioId: number): Promise<Promark
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
+  }
+}
+
+export async function editarProcessoPromarcos(processoId: number, data: {
+  escritorioid: number;
+  beneficioid: number;
+  pessoaid: number;
+  dataentrada: string;
+  urgencia: boolean;
+  modo: string;
+  numeroprocesso?: string;
+  fluxo?: string;
+  estagio?: string;
+  observacoes?: string;
+  fatogerador?: string;
+  numeropasta?: string;
+  terrapropia?: boolean;
+  incra?: boolean;
+  vinculoemprego?: string;
+}): Promise<{ sucesso: boolean; mensagem?: string }> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/processos/${processoId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json() as Record<string, unknown>;
+    if (!res.ok) {
+      const msg = (result?.mensagem as string) || (result?.message as string) || "Erro ao atualizar processo";
+      return { sucesso: false, mensagem: msg };
+    }
+    return { sucesso: true, mensagem: (result?.mensagem as string) };
+  } catch {
+    return { sucesso: false, mensagem: "Erro ao conectar com o Promarcos" };
   }
 }
 
