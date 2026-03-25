@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { buscarPorCpf, salvarPessoa, type PromarcosPessoa, type PromarkosProcesso } from "@/lib/promarcos-api";
 import { 
   User, Phone, MapPin, FileText, FolderOpen, Save, 
   ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase
@@ -61,6 +62,11 @@ export default function ClientForm() {
 
   const [activeTab, setActiveTab] = useState<"cadastro" | "processos" | "documentos">("cadastro");
 
+  // --- Promarcos CPF check state ---
+  const [cpfCheckResult, setCpfCheckResult] = useState<{ existe: boolean; pessoa?: PromarcosPessoa } | null>(null);
+  const [cpfChecking, setCpfChecking] = useState(false);
+  const cpfTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // --- API Hooks ---
   const { data: clientData, isLoading: isLoadingClient } = useGetCliente(clientId, { query: { enabled: isEditing }});
   const createClient = useCreateCliente();
@@ -85,6 +91,33 @@ export default function ClientForm() {
     }
   }, [clientData, reset]);
 
+  // --- CPF watch → check Promarcos ---
+  const cpfValue = watch("cpf");
+  useEffect(() => {
+    if (isEditing) return;
+    const cpfNums = cpfValue?.replace(/\D/g, "") || "";
+    if (cpfNums.length !== 11) {
+      setCpfCheckResult(null);
+      return;
+    }
+    if (cpfTimerRef.current) clearTimeout(cpfTimerRef.current);
+    cpfTimerRef.current = setTimeout(async () => {
+      setCpfChecking(true);
+      try {
+        const result = await buscarPorCpf(cpfNums);
+        if (result.existe && result.pessoas.length > 0) {
+          setCpfCheckResult({ existe: true, pessoa: result.pessoas[0] });
+        } else {
+          setCpfCheckResult({ existe: false });
+        }
+      } catch {
+        setCpfCheckResult(null);
+      } finally {
+        setCpfChecking(false);
+      }
+    }, 600);
+  }, [cpfValue, isEditing]);
+
   // --- Masks & External API ---
   const cepValue = watch("cep");
   useEffect(() => {
@@ -107,12 +140,62 @@ export default function ClientForm() {
   // --- Handlers ---
   const onSubmit = async (data: ClientFormData) => {
     try {
+      // Parse data de nascimento DD/MM/AAAA → ISO
+      let nascimentoISO: string | null = null;
+      if (data.dataNascimento) {
+        const parts = data.dataNascimento.split("/");
+        if (parts.length === 3) {
+          nascimentoISO = `${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`;
+        } else if (data.dataNascimento.includes("-")) {
+          nascimentoISO = data.dataNascimento;
+        }
+      }
+
+      // Save to Promarcos API
+      const promarkosPayload = {
+        Pessoa: {
+          razao_social: data.nomeCompleto,
+          cpf: data.cpf,
+          rg: data.rgRepresentante || "",
+          orgaoemissor: data.orgaoEmissor || "",
+          estado_civil: data.estadoCivil || "",
+          nascimento: nascimentoISO,
+          sexo: data.sexo === "Masculino" ? "M" : data.sexo === "Feminino" ? "F" : data.sexo || "",
+          cep: data.cep?.replace(/\D/g, "") || "",
+          bairro: data.bairro || "",
+          logradouro: data.logradouro || "",
+          numero: data.numero || "",
+          complemento: data.complemento || "",
+          estadoId: null as number | null,
+          cidadeId: null as number | null,
+          email1: data.email || "",
+          telefone1: data.telefone || "",
+          telefone2: data.telefone2 || "",
+          profissao: data.profissao || "",
+          observacoes: data.observacao || "",
+          ativo: true,
+          codempresa: 4,
+        },
+        Processos: [],
+      };
+
+      // Fill estadoId based on UF abbreviation (known from buscarcpf result or ViaCEP)
+      if (cpfCheckResult?.existe && cpfCheckResult.pessoa?.estadoId) {
+        promarkosPayload.Pessoa.estadoId = cpfCheckResult.pessoa.estadoId;
+        promarkosPayload.Pessoa.cidadeId = cpfCheckResult.pessoa.cidadeId;
+      }
+
+      const promarcosResult = await salvarPessoa(promarkosPayload);
+      if (!promarcosResult.sucesso && promarcosResult.duplicado) {
+        toast({ title: "CPF já cadastrado no Promarcos", description: `Já existe: ${cpfCheckResult?.pessoa?.razao_social || ""}`, variant: "destructive" });
+      }
+
       if (isEditing) {
         await updateClient.mutateAsync({ id: clientId, data });
         toast({ title: "Sucesso", description: "Cliente atualizado com sucesso!" });
       } else {
         const newClient = await createClient.mutateAsync({ data });
-        toast({ title: "Sucesso", description: "Cliente criado com sucesso!" });
+        toast({ title: "Sucesso", description: promarcosResult.sucesso ? "Cliente salvo no Promarcos e no sistema!" : "Cliente salvo no sistema (Promarcos: verifique)." });
         setLocation(`/cliente/${newClient.id}`);
       }
     } catch (error) {
@@ -301,6 +384,44 @@ export default function ClientForm() {
                 <h2 className="text-xl font-bold flex items-center gap-2 mb-6">
                   <User className="w-5 h-5 text-primary" /> Dados Pessoais
                 </h2>
+
+                {/* CPF Promarcos Alert */}
+                {!isEditing && cpfCheckResult?.existe && cpfCheckResult.pessoa && (
+                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 rounded-xl bg-amber-50 border-2 border-amber-300 flex flex-col gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-amber-600 font-bold text-sm">!</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold text-amber-800 text-sm">CPF já cadastrado no Promarcos</p>
+                        <p className="text-amber-700 text-sm mt-0.5">
+                          <span className="font-semibold">{cpfCheckResult.pessoa.razao_social}</span>
+                          {cpfCheckResult.pessoa.cidade && ` — ${cpfCheckResult.pessoa.cidade}/${cpfCheckResult.pessoa.estado}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-amber-700 bg-amber-100/60 rounded-lg p-3">
+                      {cpfCheckResult.pessoa.telefone1 && <span><b>Tel:</b> {cpfCheckResult.pessoa.telefone1}</span>}
+                      {cpfCheckResult.pessoa.profissao && <span><b>Prof:</b> {cpfCheckResult.pessoa.profissao}</span>}
+                      {cpfCheckResult.pessoa.estado_civil && <span><b>Civil:</b> {cpfCheckResult.pessoa.estado_civil}</span>}
+                      {cpfCheckResult.pessoa.cep && <span><b>CEP:</b> {cpfCheckResult.pessoa.cep}</span>}
+                    </div>
+                    <p className="text-xs text-amber-600">Você pode continuar o cadastro — os dados serão atualizados no Promarcos.</p>
+                  </motion.div>
+                )}
+                {!isEditing && cpfCheckResult?.existe === false && cpfValue?.replace(/\D/g, "").length === 11 && (
+                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-3 rounded-xl bg-green-50 border-2 border-green-200 flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                    <p className="text-green-700 text-sm font-medium">CPF livre — não há cadastro no Promarcos para este CPF.</p>
+                  </motion.div>
+                )}
+                {!isEditing && cpfChecking && (
+                  <div className="mb-6 p-3 rounded-xl bg-blue-50 border-2 border-blue-100 flex items-center gap-3">
+                    <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                    <p className="text-blue-600 text-sm">Verificando CPF no Promarcos...</p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
                   <InputField label="CPF *" name="cpf" maskFn={formatCPF} placeholder="000.000.000-00" />
                   <div className="lg:col-span-2">

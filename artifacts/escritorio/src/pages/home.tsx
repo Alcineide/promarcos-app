@@ -1,15 +1,40 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { Search, UserPlus, ChevronRight, FileText, Briefcase, MapPin } from "lucide-react";
+import { Search, UserPlus, ChevronRight, FileText, Briefcase, MapPin, AlertCircle } from "lucide-react";
 import { useListClientes } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout";
 import { motion } from "framer-motion";
 import { formatCPF } from "@/lib/utils";
+import { buscarPorCpf, type PromarcosPessoa } from "@/lib/promarcos-api";
+import { cn } from "@/lib/utils";
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [promarkosResult, setPromarkosResult] = useState<{ existe: boolean; pessoa?: PromarcosPessoa } | null>(null);
+  const [promarkosLoading, setPromarkosLoading] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const { data: clients, isLoading } = useListClientes({ search: searchTerm });
+
+  useEffect(() => {
+    const digits = searchTerm.replace(/\D/g, "");
+    if (digits.length !== 11) {
+      setPromarkosResult(null);
+      return;
+    }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      setPromarkosLoading(true);
+      try {
+        const result = await buscarPorCpf(digits);
+        setPromarkosResult(result.existe && result.pessoas.length > 0 ? { existe: true, pessoa: result.pessoas[0] } : { existe: false });
+      } catch {
+        setPromarkosResult(null);
+      } finally {
+        setPromarkosLoading(false);
+      }
+    }, 600);
+  }, [searchTerm]);
 
   return (
     <Layout>
@@ -28,9 +53,12 @@ export default function Home() {
           </Link>
         </header>
 
-        <div className="bg-card rounded-2xl p-4 md:p-6 shadow-sm border border-border/50">
+        <div className="bg-card rounded-2xl p-4 md:p-6 shadow-sm border border-border/50 space-y-3">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            {promarkosLoading && (
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            )}
             <input
               type="text"
               placeholder="Buscar por Nome ou CPF..."
@@ -39,11 +67,42 @@ export default function Home() {
               className="w-full pl-12 pr-4 py-4 rounded-xl bg-background border-2 border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200 text-lg"
             />
           </div>
+
+          {/* Promarcos result when CPF typed */}
+          {promarkosResult?.existe && promarkosResult.pessoa && (
+            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-xl bg-blue-50 border-2 border-blue-200">
+              <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-2">Encontrado no Promarcos</p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <p className="font-bold text-blue-900 text-lg">{promarkosResult.pessoa.razao_social}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-blue-700">
+                    <span className="flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {promarkosResult.pessoa.cpf}</span>
+                    {promarkosResult.pessoa.cidade && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {promarkosResult.pessoa.cidade}/{promarkosResult.pessoa.estado}</span>}
+                    {promarkosResult.pessoa.telefone1 && <span>Tel: {promarkosResult.pessoa.telefone1}</span>}
+                    {promarkosResult.pessoa.profissao && <span>Profissão: {promarkosResult.pessoa.profissao}</span>}
+                    {promarkosResult.pessoa.estado_civil && <span>Civil: {promarkosResult.pessoa.estado_civil}</span>}
+                  </div>
+                </div>
+                <Link
+                  href={`/novo?cpf=${promarkosResult.pessoa.cpf.replace(/\D/g, "")}`}
+                  className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+                >
+                  Abrir Cadastro
+                </Link>
+              </div>
+            </motion.div>
+          )}
+          {promarkosResult?.existe === false && searchTerm.replace(/\D/g, "").length === 11 && (
+            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="px-4 py-3 rounded-xl bg-muted/60 border border-border text-sm text-muted-foreground flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              CPF não encontrado no Promarcos. Você pode cadastrá-lo agora.
+            </motion.div>
+          )}
         </div>
 
         <div className="space-y-4">
           <h2 className="text-xl font-semibold px-2">
-            {isLoading ? "Buscando..." : `Resultados (${clients?.length || 0})`}
+            {isLoading ? "Buscando..." : `Resultados no sistema local (${clients?.length || 0})`}
           </h2>
 
           {isLoading ? (
