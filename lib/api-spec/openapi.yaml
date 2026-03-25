@@ -398,16 +398,36 @@ components:
           type: integer
         clienteId:
           type: integer
-        numero:
+        numeroPasta:
           type: ["string", "null"]
-        vara:
+        numeroProcesso:
           type: ["string", "null"]
-        comarca:
+        dataEntrada:
           type: ["string", "null"]
-        assunto:
+        fluxo:
+          type: ["string", "null"]
+        estagio:
+          type: ["string", "null"]
+        urgencia:
+          type: ["boolean", "null"]
+        observacoes:
+          type: ["string", "null"]
+        fatoGerador:
+          type: ["string", "null"]
+        matricula:
+          type: ["string", "null"]
+        dataFatoGerador:
+          type: ["string", "null"]
+        escritorioProcesso:
+          type: ["string", "null"]
+        beneficio:
+          type: ["string", "null"]
+        tipoBeneficio:
           type: ["string", "null"]
         status:
           type: string
+        cadastradoPor:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -422,16 +442,36 @@ components:
     CreateProcessoInput:
       type: object
       properties:
-        numero:
+        numeroPasta:
           type: ["string", "null"]
-        vara:
+        numeroProcesso:
           type: ["string", "null"]
-        comarca:
+        dataEntrada:
           type: ["string", "null"]
-        assunto:
+        fluxo:
+          type: ["string", "null"]
+        estagio:
+          type: ["string", "null"]
+        urgencia:
+          type: ["boolean", "null"]
+        observacoes:
+          type: ["string", "null"]
+        fatoGerador:
+          type: ["string", "null"]
+        matricula:
+          type: ["string", "null"]
+        dataFatoGerador:
+          type: ["string", "null"]
+        escritorioProcesso:
+          type: ["string", "null"]
+        beneficio:
+          type: ["string", "null"]
+        tipoBeneficio:
           type: ["string", "null"]
         status:
           type: string
+        cadastradoPor:
+          type: ["string", "null"]
       required:
         - status
 

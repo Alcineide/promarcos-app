@@ -1,3 +1,20 @@
+# Cadastro de Clientes - Mendes Advocacia
+
+## Sobre o App
+
+Sistema complementar de cadastro de clientes para o escritório Mendes Advocacia. Permite buscar, cadastrar e gerenciar clientes com seus respectivos processos (pastas) e documentos anexados.
+
+## Funcionalidades
+
+- **Busca de clientes** por nome ou CPF
+- **Cadastro completo** com todos os campos (dados pessoais, contato, endereço)
+- **CEP automático** via ViaCEP
+- **Processos/Pastas**: cadastro com número, fluxo, estágio, benefício, fato gerador, etc.
+- **Documentos digitais** e **anexos** de documentos
+- **Pasta local do cliente**: campo para salvar e copiar o caminho da pasta
+
+---
+
 # Workspace
 
 ## Overview

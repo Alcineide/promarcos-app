@@ -146,16 +146,34 @@ export default function ClientForm() {
   };
 
   const [isProcessoModalOpen, setProcessoModalOpen] = useState(false);
-  const [novoProcesso, setNovoProcesso] = useState({ numero: "", vara: "", comarca: "", assunto: "", status: "Ativo" });
+  const [editingProcesso, setEditingProcesso] = useState<any>(null);
+  const emptyProcesso = { numeroPasta: "", numeroProcesso: "", dataEntrada: "", fluxo: "Analise", estagio: "Triagem", urgencia: false, observacoes: "", fatoGerador: "", matricula: "", dataFatoGerador: "", escritorioProcesso: "Mendes Advocacia - Araguaína - A", beneficio: "AÇÃO CÍVEL", tipoBeneficio: "TODAS", status: "Ativo", cadastradoPor: "" };
+  const [novoProcesso, setNovoProcesso] = useState<any>(emptyProcesso);
+
+  const openProcessoModal = (processo?: any) => {
+    if (processo) {
+      setEditingProcesso(processo);
+      setNovoProcesso({ ...emptyProcesso, ...processo });
+    } else {
+      setEditingProcesso(null);
+      setNovoProcesso(emptyProcesso);
+    }
+    setProcessoModalOpen(true);
+  };
 
   const handleCreateProcesso = async () => {
     try {
-      await createProcesso.mutateAsync({ id: clientId, data: novoProcesso });
-      toast({ title: "Sucesso", description: "Processo adicionado!" });
+      if (editingProcesso) {
+        await updateProcesso.mutateAsync({ id: editingProcesso.id, data: novoProcesso });
+        toast({ title: "Sucesso", description: "Processo atualizado!" });
+      } else {
+        await createProcesso.mutateAsync({ id: clientId, data: novoProcesso });
+        toast({ title: "Sucesso", description: "Processo adicionado!" });
+      }
       setProcessoModalOpen(false);
       queryClient.invalidateQueries({ queryKey: [`/api/clientes/${clientId}/processos`] });
     } catch {
-      toast({ title: "Erro", description: "Falha ao criar processo", variant: "destructive" });
+      toast({ title: "Erro", description: "Falha ao salvar processo", variant: "destructive" });
     }
   };
 
@@ -389,14 +407,14 @@ export default function ClientForm() {
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               <div className="flex justify-between items-center bg-card p-6 rounded-2xl shadow-sm border border-border/50">
                 <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Briefcase className="w-5 h-5 text-primary" /> Processos do Cliente
+                  <Briefcase className="w-5 h-5 text-primary" /> Pastas / Processos do Cliente
                 </h2>
                 <button 
                   type="button"
-                  onClick={() => setProcessoModalOpen(true)}
-                  className="px-4 py-2 bg-primary/10 text-primary font-bold rounded-lg hover:bg-primary/20 transition-colors"
+                  onClick={() => openProcessoModal()}
+                  className="px-4 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-lg shadow-primary/20"
                 >
-                  + Novo Processo
+                  + Nova Pasta
                 </button>
               </div>
 
@@ -404,27 +422,60 @@ export default function ClientForm() {
                 <div className="bg-card p-12 text-center rounded-2xl border border-border/50 border-dashed">
                   <Briefcase className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
                   <p className="text-muted-foreground font-medium">Nenhum processo cadastrado para este cliente.</p>
+                  <button type="button" onClick={() => openProcessoModal()} className="mt-4 px-6 py-2.5 bg-primary/10 text-primary font-semibold rounded-xl hover:bg-primary/20 transition-colors">+ Abrir Nova Pasta</button>
                 </div>
               ) : (
                 <div className="grid gap-4">
                   {processos?.map(p => (
-                    <div key={p.id} className="bg-card p-5 rounded-2xl shadow-sm border border-border/50 flex flex-col md:flex-row justify-between md:items-center gap-4 hover:border-primary/30 transition-colors">
-                      <div>
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-bold text-lg">{p.numero || "Sem número"}</h3>
-                          <span className={cn(
-                            "px-2.5 py-0.5 rounded-full text-xs font-bold",
-                            p.status === "Ativo" ? "bg-green-100 text-green-700" :
-                            p.status === "Suspenso" ? "bg-amber-100 text-amber-700" :
-                            "bg-slate-100 text-slate-700"
-                          )}>
-                            {p.status}
-                          </span>
+                    <div key={p.id} className="bg-card rounded-2xl shadow-sm border border-border/50 overflow-hidden hover:border-primary/30 transition-colors">
+                      {/* Card Header */}
+                      <div className="p-5 border-b border-border/50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-lg uppercase">{p.beneficio} {p.tipoBeneficio}</h3>
+                            {p.numeroPasta && (
+                              <span className="inline-flex items-center mt-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary text-primary-foreground">
+                                Pasta {p.numeroPasta}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-xs font-bold",
+                              p.status === "Ativo" ? "bg-green-100 text-green-700 border border-green-200" :
+                              p.status === "JUD:Protocolado" ? "bg-red-500 text-white" :
+                              p.status === "Suspenso" ? "bg-amber-100 text-amber-700 border border-amber-200" :
+                              p.status === "Arquivado" ? "bg-slate-100 text-slate-600 border border-slate-200" :
+                              "bg-blue-100 text-blue-700 border border-blue-200"
+                            )}>
+                              {p.status}
+                            </span>
+                            {p.urgencia && <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">⚡ Urgente</span>}
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {p.vara} • {p.comarca}
-                        </p>
-                        <p className="text-sm font-medium mt-1">Assunto: {p.assunto}</p>
+                      </div>
+
+                      {/* Card Body */}
+                      <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-6 text-sm">
+                        <div><span className="font-semibold text-muted-foreground">Fato gerador: </span>{p.fatoGerador || "Sem fato gerador vinculado"}</div>
+                        <div><span className="font-semibold text-muted-foreground">Matrícula: </span>{p.matricula || "Sem matrícula"}</div>
+                        <div><span className="font-semibold text-muted-foreground">Data fato gerador: </span>{p.dataFatoGerador || "Não informada"}</div>
+                        <div><span className="font-semibold text-muted-foreground">Número processo: </span>{p.numeroProcesso || "Sem número"}</div>
+                        <div><span className="font-semibold text-muted-foreground">Data entrada: </span>{p.dataEntrada || "—"}</div>
+                        <div><span className="font-semibold text-muted-foreground">Escritório: </span>{p.escritorioProcesso || "—"}</div>
+                        {p.estagio && <div><span className="font-semibold text-muted-foreground">Estágio: </span>{p.estagio}</div>}
+                        {p.fluxo && <div><span className="font-semibold text-muted-foreground">Fluxo: </span>{p.fluxo}</div>}
+                        {p.cadastradoPor && <div className="md:col-span-2 text-xs text-muted-foreground pt-1 border-t border-border/50">Cadastrado em {new Date(p.createdAt).toLocaleDateString('pt-BR')} por {p.cadastradoPor}</div>}
+                      </div>
+
+                      {/* Card Actions */}
+                      <div className="px-5 pb-5 flex flex-wrap gap-3">
+                        <button type="button" onClick={() => generateDoc("Folha de Rosto")} className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2">
+                          <FileText className="w-4 h-4" /> Gerar Folha de Rosto
+                        </button>
+                        <button type="button" onClick={() => openProcessoModal(p)} className="px-3 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
+                          ✏️ Editar
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -558,45 +609,149 @@ export default function ClientForm() {
         </div>
       </div>
 
-      {/* Modal Novo Processo */}
+      {/* Modal Novo / Editar Processo */}
       <AnimatePresence>
         {isProcessoModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-card w-full max-w-lg rounded-2xl shadow-xl overflow-hidden border border-border">
-              <div className="p-6 border-b border-border/50">
-                <h3 className="text-xl font-bold">Cadastrar Novo Processo</h3>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-card w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden border border-border max-h-[90vh] flex flex-col">
+              <div className="p-6 border-b border-border/50 bg-primary/5 flex-shrink-0">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-primary" />
+                  {editingProcesso ? "Editar Processo" : "Novo / Abrir Pasta"}
+                </h3>
               </div>
-              <div className="p-6 space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold">Número do Processo</label>
-                  <input type="text" value={novoProcesso.numero} onChange={e => setNovoProcesso(p => ({...p, numero: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+
+              <div className="p-6 space-y-5 overflow-y-auto">
+                {/* Linha 1 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-semibold">Vara</label>
-                    <input type="text" value={novoProcesso.vara} onChange={e => setNovoProcesso(p => ({...p, vara: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none" />
+                    <label className="text-sm font-semibold">Número do Processo</label>
+                    <input type="text" value={novoProcesso.numeroProcesso} onChange={e => setNovoProcesso((p: any) => ({...p, numeroProcesso: e.target.value}))} placeholder="0000000-00.0000.0.00.0000" className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-semibold">Comarca</label>
-                    <input type="text" value={novoProcesso.comarca} onChange={e => setNovoProcesso(p => ({...p, comarca: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none" />
+                    <label className="text-sm font-semibold">Data de Entrada</label>
+                    <input type="date" value={novoProcesso.dataEntrada} onChange={e => setNovoProcesso((p: any) => ({...p, dataEntrada: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background" />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold">Assunto</label>
-                  <input type="text" value={novoProcesso.assunto} onChange={e => setNovoProcesso(p => ({...p, assunto: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none" />
+
+                {/* Linha 2 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Fluxo</label>
+                    <select value={novoProcesso.fluxo} onChange={e => setNovoProcesso((p: any) => ({...p, fluxo: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background">
+                      <option value="Analise">Analise</option>
+                      <option value="Judicial">Judicial</option>
+                      <option value="Administrativo">Administrativo</option>
+                      <option value="Recursal">Recursal</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Estágio</label>
+                    <select value={novoProcesso.estagio} onChange={e => setNovoProcesso((p: any) => ({...p, estagio: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background">
+                      <option value="Triagem">Triagem</option>
+                      <option value="Protocolo">Protocolo</option>
+                      <option value="Distribuído">Distribuído</option>
+                      <option value="Em andamento">Em andamento</option>
+                      <option value="Concluído">Concluído</option>
+                    </select>
+                  </div>
                 </div>
+
+                {/* Urgência */}
+                <div className="flex items-center gap-3 p-4 rounded-xl border-2 border-border bg-background">
+                  <input type="checkbox" id="urgencia" checked={novoProcesso.urgencia} onChange={e => setNovoProcesso((p: any) => ({...p, urgencia: e.target.checked}))} className="w-5 h-5 rounded border-border accent-primary cursor-pointer" />
+                  <label htmlFor="urgencia" className="font-semibold cursor-pointer text-foreground">⚡ Urgência</label>
+                </div>
+
+                {/* Fato Gerador */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold">Status</label>
-                  <select value={novoProcesso.status} onChange={e => setNovoProcesso(p => ({...p, status: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background">
-                    <option value="Ativo">Ativo</option>
-                    <option value="Suspenso">Suspenso</option>
-                    <option value="Arquivado">Arquivado</option>
+                  <label className="text-sm font-semibold">Fato Gerador</label>
+                  <input type="text" value={novoProcesso.fatoGerador} onChange={e => setNovoProcesso((p: any) => ({...p, fatoGerador: e.target.value}))} placeholder="Ex: MWB COM. DE MATERIAIS PARA CONSTRUCAO EIRELI" className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background" />
+                </div>
+
+                {/* Linha 3 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Matrícula</label>
+                    <input type="text" value={novoProcesso.matricula} onChange={e => setNovoProcesso((p: any) => ({...p, matricula: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Data do Fato Gerador</label>
+                    <input type="date" value={novoProcesso.dataFatoGerador} onChange={e => setNovoProcesso((p: any) => ({...p, dataFatoGerador: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background" />
+                  </div>
+                </div>
+
+                {/* Linha 4 - Benefício */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Benefício</label>
+                    <select value={novoProcesso.beneficio} onChange={e => setNovoProcesso((p: any) => ({...p, beneficio: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background">
+                      <option value="AÇÃO CÍVEL">AÇÃO CÍVEL</option>
+                      <option value="APOSENTADORIA">APOSENTADORIA</option>
+                      <option value="AUXÍLIO-DOENÇA">AUXÍLIO-DOENÇA</option>
+                      <option value="AUXÍLIO-ACIDENTE">AUXÍLIO-ACIDENTE</option>
+                      <option value="BPC/LOAS">BPC/LOAS</option>
+                      <option value="PENSÃO POR MORTE">PENSÃO POR MORTE</option>
+                      <option value="SALÁRIO-MATERNIDADE">SALÁRIO-MATERNIDADE</option>
+                      <option value="REVISÃO DE BENEFÍCIO">REVISÃO DE BENEFÍCIO</option>
+                      <option value="OUTROS">OUTROS</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Tipo Benefício</label>
+                    <select value={novoProcesso.tipoBeneficio} onChange={e => setNovoProcesso((p: any) => ({...p, tipoBeneficio: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background">
+                      <option value="TODAS">TODAS</option>
+                      <option value="RURAL">RURAL</option>
+                      <option value="URBANO">URBANO</option>
+                      <option value="MISTO">MISTO</option>
+                      <option value="HÍBRIDO">HÍBRIDO</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Nº Pasta</label>
+                    <input type="text" value={novoProcesso.numeroPasta} onChange={e => setNovoProcesso((p: any) => ({...p, numeroPasta: e.target.value}))} placeholder="Ex: 005398" className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background" />
+                  </div>
+                </div>
+
+                {/* Escritório */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">Escritório</label>
+                  <select value={novoProcesso.escritorioProcesso} onChange={e => setNovoProcesso((p: any) => ({...p, escritorioProcesso: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background">
+                    <option value="Mendes Advocacia - Araguaína - A">Mendes Advocacia - Araguaína - A</option>
+                    <option value="Mendes Advocacia - Matriz">Mendes Advocacia - Matriz</option>
+                    <option value="Mendes Advocacia - Filial">Mendes Advocacia - Filial</option>
                   </select>
                 </div>
+
+                {/* Status */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">Status / Situação</label>
+                  <select value={novoProcesso.status} onChange={e => setNovoProcesso((p: any) => ({...p, status: e.target.value}))} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background">
+                    <option value="Ativo">Ativo</option>
+                    <option value="JUD:Protocolado">JUD:Protocolado</option>
+                    <option value="Em análise">Em análise</option>
+                    <option value="Suspenso">Suspenso</option>
+                    <option value="Arquivado">Arquivado</option>
+                    <option value="Encerrado">Encerrado</option>
+                  </select>
+                </div>
+
+                {/* Cadastrado por */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">Cadastrado Por</label>
+                  <input type="text" value={novoProcesso.cadastradoPor} onChange={e => setNovoProcesso((p: any) => ({...p, cadastradoPor: e.target.value}))} placeholder="Nome do responsável" className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background" />
+                </div>
+
+                {/* Observações */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">Observações do Processo</label>
+                  <textarea value={novoProcesso.observacoes} onChange={e => setNovoProcesso((p: any) => ({...p, observacoes: e.target.value}))} rows={3} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background resize-none" />
+                </div>
               </div>
-              <div className="p-4 bg-muted/30 flex justify-end gap-3">
-                <button type="button" onClick={() => setProcessoModalOpen(false)} className="px-4 py-2.5 font-semibold text-muted-foreground hover:bg-muted rounded-xl transition-colors">Cancelar</button>
-                <button type="button" onClick={handleCreateProcesso} className="px-6 py-2.5 font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">Salvar Processo</button>
+
+              <div className="p-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 flex-shrink-0">
+                <button type="button" onClick={() => setProcessoModalOpen(false)} className="px-5 py-2.5 font-semibold text-muted-foreground hover:bg-muted rounded-xl transition-colors">Cancelar</button>
+                <button type="button" onClick={handleCreateProcesso} className="px-8 py-2.5 font-bold bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors shadow-lg">Salvar Processo</button>
               </div>
             </motion.div>
           </div>

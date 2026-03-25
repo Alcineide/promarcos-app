@@ -112,9 +112,11 @@ router.get("/clientes/:id/processos", async (req, res) => {
 router.post("/clientes/:id/processos", async (req, res) => {
   try {
     const clienteId = Number(req.params.id);
+    const body = { ...req.body, clienteId };
+    if (body.urgencia !== undefined) body.urgencia = Boolean(body.urgencia);
     const [processo] = await db
       .insert(processosTable)
-      .values({ ...req.body, clienteId })
+      .values(body)
       .returning();
     res.status(201).json({
       ...processo,

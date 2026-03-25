@@ -10,14 +10,34 @@ export interface Processo {
   id: number;
   clienteId: number;
   /** @nullable */
-  numero?: string | null;
+  numeroPasta?: string | null;
   /** @nullable */
-  vara?: string | null;
+  numeroProcesso?: string | null;
   /** @nullable */
-  comarca?: string | null;
+  dataEntrada?: string | null;
   /** @nullable */
-  assunto?: string | null;
+  fluxo?: string | null;
+  /** @nullable */
+  estagio?: string | null;
+  /** @nullable */
+  urgencia?: boolean | null;
+  /** @nullable */
+  observacoes?: string | null;
+  /** @nullable */
+  fatoGerador?: string | null;
+  /** @nullable */
+  matricula?: string | null;
+  /** @nullable */
+  dataFatoGerador?: string | null;
+  /** @nullable */
+  escritorioProcesso?: string | null;
+  /** @nullable */
+  beneficio?: string | null;
+  /** @nullable */
+  tipoBeneficio?: string | null;
   status: string;
+  /** @nullable */
+  cadastradoPor?: string | null;
   createdAt: string;
   updatedAt: string;
 }
