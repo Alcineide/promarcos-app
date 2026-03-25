@@ -366,17 +366,23 @@ export default function ClientForm() {
 
   const [isProcessoModalOpen, setProcessoModalOpen] = useState(false);
   const [editingProcesso, setEditingProcesso] = useState<any>(null);
-  const emptyProcesso = { numeroPasta: "", numeroProcesso: "", dataEntrada: "", fluxo: "Analise", estagio: "Triagem", urgencia: false, observacoes: "", fatoGerador: "", matricula: "", dataFatoGerador: "", escritorioProcesso: "Mendes Advocacia - Araguaína - A", beneficio: "AÇÃO CÍVEL", tipoBeneficio: "TODAS", status: "Ativo", cadastradoPor: "" };
+  const emptyProcesso = { numeroPasta: "", numeroProcesso: "", dataEntrada: "", fluxo: "Analise", estagio: "Triagem", urgencia: false, observacoes: "", fatoGerador: "", matricula: "", dataFatoGerador: "", escritorioProcesso: "Mendes Advocacia - Araguaína - A", beneficio: "AÇÃO CÍVEL", tipoBeneficio: "TODAS", status: "Ativo", cadastradoPor: "", localPromarkosEscritorioid: 0, localPromarkosBeneficioidCat: 0, localPromarkosBeneficioid: 0, sincronizarPromarcos: false };
   const [novoProcesso, setNovoProcesso] = useState<any>(emptyProcesso);
 
-  const openProcessoModal = (processo?: any) => {
+  const openProcessoModal = async (processo?: any) => {
     if (processo) {
       setEditingProcesso(processo);
-      setNovoProcesso({ ...emptyProcesso, ...processo });
+      setNovoProcesso({ ...emptyProcesso, ...processo, localPromarkosEscritorioid: 0, localPromarkosBeneficioidCat: 0, localPromarkosBeneficioid: 0, sincronizarPromarcos: false });
     } else {
       setEditingProcesso(null);
-      setNovoProcesso(emptyProcesso);
+      const defaultEscritorio = empresas[0]?.id ?? 0;
+      setNovoProcesso({ ...emptyProcesso, localPromarkosEscritorioid: defaultEscritorio });
     }
+    if (beneficios.length === 0) {
+      const bens = await buscarBeneficios();
+      setBeneficios(bens);
+    }
+    setBeneficioTipos([]);
     setProcessoModalOpen(true);
   };
 
@@ -385,12 +391,46 @@ export default function ClientForm() {
       if (editingProcesso) {
         await updateProcesso.mutateAsync({ id: editingProcesso.id, data: novoProcesso });
         toast({ title: "Sucesso", description: "Processo atualizado!" });
+        setProcessoModalOpen(false);
+        queryClient.invalidateQueries({ queryKey: [`/api/clientes/${clientId}/processos`] });
       } else {
-        await createProcesso.mutateAsync({ id: clientId, data: novoProcesso });
-        toast({ title: "Sucesso", description: "Processo adicionado!" });
+        const localResult = await createProcesso.mutateAsync({ id: clientId, data: novoProcesso });
+        const localId = (localResult as any)?.id;
+        const podePromarcos = novoProcesso.sincronizarPromarcos && promarcosCodigo && novoProcesso.localPromarkosEscritorioid > 0 && novoProcesso.localPromarkosBeneficioid > 0;
+        if (podePromarcos) {
+          try {
+            const pmResult = await criarProcessoPromarcos({
+              escritorioid: novoProcesso.localPromarkosEscritorioid,
+              beneficioid: novoProcesso.localPromarkosBeneficioid,
+              pessoaid: promarcosCodigo!,
+              dataentrada: novoProcesso.dataEntrada || new Date().toISOString().split("T")[0],
+              urgencia: !!novoProcesso.urgencia,
+              modo: "novo",
+              numeroprocesso: novoProcesso.numeroProcesso || undefined,
+              fluxo: novoProcesso.fluxo || undefined,
+              estagio: novoProcesso.estagio || undefined,
+              observacoes: novoProcesso.observacoes || undefined,
+              fatogerador: novoProcesso.fatoGerador || undefined,
+              numeropasta: novoProcesso.numeroPasta || undefined,
+            });
+            if (pmResult.sucesso && pmResult.id && localId) {
+              await updateProcesso.mutateAsync({ id: localId, data: { promarkosProcessoId: pmResult.id } });
+              fetchPromarkosProcessos(promarcosCodigo!);
+              toast({ title: "Processo criado!", description: `Salvo localmente e no Promarcos (pasta #${pmResult.id}).` });
+            } else if (!pmResult.sucesso) {
+              toast({ title: "Processo salvo localmente", description: `Mas falhou no Promarcos: ${pmResult.mensagem || "erro desconhecido"}`, variant: "destructive" });
+            } else {
+              toast({ title: "Processo criado!", description: "Salvo localmente e no Promarcos." });
+            }
+          } catch {
+            toast({ title: "Processo salvo localmente", description: "Mas houve uma falha ao enviar para o Promarcos.", variant: "destructive" });
+          }
+        } else {
+          toast({ title: "Sucesso", description: "Processo adicionado!" });
+        }
+        setProcessoModalOpen(false);
+        queryClient.invalidateQueries({ queryKey: [`/api/clientes/${clientId}/processos`] });
       }
-      setProcessoModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: [`/api/clientes/${clientId}/processos`] });
     } catch {
       toast({ title: "Erro", description: "Falha ao salvar processo", variant: "destructive" });
     }
@@ -476,6 +516,14 @@ export default function ClientForm() {
     }, 300);
     return () => clearTimeout(t);
   }, [novoSocioTermo]);
+
+  useEffect(() => {
+    const catId = novoProcesso.localPromarkosBeneficioidCat;
+    if (!catId || catId === 0 || !isProcessoModalOpen) return;
+    setBeneficioTipos([]);
+    setNovoProcesso((p: any) => ({ ...p, localPromarkosBeneficioid: 0 }));
+    buscarBeneficioTipos(catId).then(setBeneficioTipos);
+  }, [novoProcesso.localPromarkosBeneficioidCat, isProcessoModalOpen]);
 
   const handleAdicionarIndicador = async () => {
     if (!novoIndSelecionado || !editingPromarkosProcesso) return;
@@ -1257,6 +1305,69 @@ export default function ClientForm() {
                   <label className="text-sm font-semibold">Observações do Processo</label>
                   <textarea value={novoProcesso.observacoes} onChange={e => setNovoProcesso((p: any) => ({...p, observacoes: e.target.value}))} rows={3} className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background resize-none" />
                 </div>
+
+                {/* Sincronizar com Promarcos — só aparece se o cliente tem código Promarcos */}
+                {promarcosCodigo && !editingProcesso && (
+                  <div className="rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="sincPromarcos"
+                        checked={!!novoProcesso.sincronizarPromarcos}
+                        onChange={e => setNovoProcesso((p: any) => ({ ...p, sincronizarPromarcos: e.target.checked }))}
+                        className="w-5 h-5 rounded border-border accent-primary cursor-pointer"
+                      />
+                      <label htmlFor="sincPromarcos" className="font-semibold cursor-pointer text-sm text-primary select-none">
+                        Criar também no Promarcos
+                      </label>
+                    </div>
+                    {novoProcesso.sincronizarPromarcos && (
+                      <div className="space-y-3 pt-1">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Escritório (Promarcos)</label>
+                          <select
+                            value={novoProcesso.localPromarkosEscritorioid}
+                            onChange={e => setNovoProcesso((p: any) => ({ ...p, localPromarkosEscritorioid: Number(e.target.value) }))}
+                            className="w-full px-3 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none bg-background text-sm"
+                          >
+                            <option value={0}>Selecione o escritório...</option>
+                            {empresas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Categoria do Benefício</label>
+                            <select
+                              value={novoProcesso.localPromarkosBeneficioidCat}
+                              onChange={e => setNovoProcesso((p: any) => ({ ...p, localPromarkosBeneficioidCat: Number(e.target.value), localPromarkosBeneficioid: 0 }))}
+                              className="w-full px-3 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none bg-background text-sm"
+                            >
+                              <option value={0}>Selecione...</option>
+                              {beneficios.map(b => <option key={b.id} value={b.id}>{b.descricao}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tipo do Benefício</label>
+                            <select
+                              value={novoProcesso.localPromarkosBeneficioid}
+                              onChange={e => setNovoProcesso((p: any) => ({ ...p, localPromarkosBeneficioid: Number(e.target.value) }))}
+                              disabled={novoProcesso.localPromarkosBeneficioidCat === 0 || beneficioTipos.length === 0}
+                              className="w-full px-3 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none bg-background text-sm disabled:opacity-50"
+                            >
+                              <option value={0}>Selecione...</option>
+                              {beneficioTipos.map(t => <option key={t.id} value={t.id}>{t.descricao}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        {novoProcesso.localPromarkosEscritorioid === 0 || novoProcesso.localPromarkosBeneficioid === 0 ? (
+                          <p className="text-xs text-amber-600">Selecione escritório e tipo de benefício para habilitar a criação no Promarcos.</p>
+                        ) : (
+                          <p className="text-xs text-green-600">Ao salvar, o processo será criado tanto localmente quanto no Promarcos.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="p-4 bg-muted/30 border-t border-border/50 flex justify-end gap-3 flex-shrink-0">

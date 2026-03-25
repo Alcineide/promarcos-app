@@ -21,6 +21,7 @@ export const processosTable = pgTable("processos", {
   tipoBeneficio: text("tipo_beneficio"),
   status: text("status").notNull().default("Ativo"),
   cadastradoPor: text("cadastrado_por"),
+  promarkosProcessoId: integer("promarcos_processo_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
