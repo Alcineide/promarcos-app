@@ -30,7 +30,7 @@ type AutoCorners = { left: number; top: number; right: number; bottom: number };
 
 function detectDocumentCorners(canvas: HTMLCanvasElement): AutoCorners | null {
   // Work at reduced resolution for speed
-  const MAX = 480;
+  const MAX = 400;
   const sw = Math.min(canvas.width, MAX);
   const sh = Math.round(canvas.height * (sw / canvas.width));
 
@@ -39,89 +39,107 @@ function detectDocumentCorners(canvas: HTMLCanvasElement): AutoCorners | null {
   small.height = sh;
   small.getContext("2d")!.drawImage(canvas, 0, 0, sw, sh);
   const { data } = small.getContext("2d")!.getImageData(0, 0, sw, sh);
-
   const N = sw * sh;
 
-  // Convert to grayscale
+  // Grayscale
   const gray = new Uint8Array(N);
   for (let i = 0; i < N; i++) {
     gray[i] = (data[i * 4] * 77 + data[i * 4 + 1] * 150 + data[i * 4 + 2] * 29) >> 8;
   }
 
-  // Compute histogram for Otsu thresholding
-  const hist = new Int32Array(256);
-  for (let i = 0; i < N; i++) hist[gray[i]]++;
-
-  // Otsu's method: find threshold that maximises between-class variance
-  let sum = 0;
-  for (let t = 0; t < 256; t++) sum += t * hist[t];
-  let sumB = 0, wB = 0, otsuThresh = 128, maxBetween = 0;
-  for (let t = 0; t < 256; t++) {
-    wB += hist[t];
-    if (!wB) continue;
-    const wF = N - wB;
-    if (!wF) break;
-    sumB += t * hist[t];
-    const mB = sumB / wB;
-    const mF = (sum - sumB) / wF;
-    const between = wB * wF * (mB - mF) * (mB - mF);
-    if (between > maxBetween) { maxBetween = between; otsuThresh = t; }
+  // Sobel gradient magnitude
+  const mag = new Float32Array(N);
+  let maxMag = 0;
+  for (let y = 1; y < sh - 1; y++) {
+    for (let x = 1; x < sw - 1; x++) {
+      const gx =
+        -gray[(y - 1) * sw + x - 1] - 2 * gray[y * sw + x - 1] - gray[(y + 1) * sw + x - 1]
+        + gray[(y - 1) * sw + x + 1] + 2 * gray[y * sw + x + 1] + gray[(y + 1) * sw + x + 1];
+      const gy =
+        -gray[(y - 1) * sw + x - 1] - 2 * gray[(y - 1) * sw + x] - gray[(y - 1) * sw + x + 1]
+        + gray[(y + 1) * sw + x - 1] + 2 * gray[(y + 1) * sw + x] + gray[(y + 1) * sw + x + 1];
+      const m = Math.sqrt(gx * gx + gy * gy);
+      mag[y * sw + x] = m;
+      if (m > maxMag) maxMag = m;
+    }
   }
 
-  // Classify: bright pixels (above threshold) = document (white paper)
-  // Also try dark-on-light in case the document is dark
-  const brightCount = new Int32Array(1);
-  const darkCount = new Int32Array(1);
-  for (let i = 0; i < N; i++) {
-    if (gray[i] > otsuThresh) brightCount[0]++;
-    else darkCount[0]++;
-  }
-  // Document is the minority class only if it covers 15-85% of image
-  const brightRatio = brightCount[0] / N;
-  if (brightRatio < 0.10 || brightRatio > 0.95) return null;
+  if (maxMag < 8) return null;
 
-  // Project bright pixels onto rows and columns
-  const colSum = new Int32Array(sw);
-  const rowSum = new Int32Array(sh);
-  let totalBright = 0;
+  // Keep only STRONG edges (≥ 35% of max) — document borders are strong,
+  // interior text is weaker and more scattered.
+  const strongThresh = maxMag * 0.35;
+  const colProj = new Float32Array(sw);
+  const rowProj = new Float32Array(sh);
   for (let y = 0; y < sh; y++) {
     for (let x = 0; x < sw; x++) {
-      if (gray[y * sw + x] > otsuThresh) {
-        colSum[x]++;
-        rowSum[y]++;
-        totalBright++;
+      const m = mag[y * sw + x];
+      if (m >= strongThresh) {
+        colProj[x] += m;
+        rowProj[y] += m;
       }
     }
   }
 
-  if (totalBright < N * 0.10) return null;
+  // Smooth projections with box filter (radius 4) to merge nearby peaks
+  function smooth(arr: Float32Array, n: number, r: number): Float32Array {
+    const out = new Float32Array(n);
+    for (let i = r; i < n - r; i++) {
+      let s = 0;
+      for (let k = -r; k <= r; k++) s += arr[i + k];
+      out[i] = s / (2 * r + 1);
+    }
+    return out;
+  }
+  const sc = smooth(colProj, sw, 4);
+  const sr = smooth(rowProj, sh, 4);
 
-  // Find document boundaries: find where density drops to < 30% of its peak
-  let maxCol = 0, maxRow = 0;
-  for (let x = 0; x < sw; x++) if (colSum[x] > maxCol) maxCol = colSum[x];
-  for (let y = 0; y < sh; y++) if (rowSum[y] > maxRow) maxRow = rowSum[y];
+  // Mask out the outer 4% border — the image frame itself creates artificial edges
+  const xb = Math.max(4, Math.floor(sw * 0.04));
+  const yb = Math.max(4, Math.floor(sh * 0.04));
+  for (let x = 0; x < xb; x++) sc[x] = 0;
+  for (let x = sw - xb; x < sw; x++) sc[x] = 0;
+  for (let y = 0; y < yb; y++) sr[y] = 0;
+  for (let y = sh - yb; y < sh; y++) sr[y] = 0;
 
-  const colThresh = maxCol * 0.30;
-  const rowThresh = maxRow * 0.30;
+  // Strategy: find the STRONGEST PEAK in the LEFT half → left document edge
+  //           STRONGEST PEAK in the RIGHT half → right document edge
+  //           STRONGEST PEAK in the TOP half   → top edge
+  //           STRONGEST PEAK in the BOTTOM half → bottom edge
+  // Document edges produce the highest concentration of strong gradients.
+  function peakInRange(arr: Float32Array, from: number, to: number): number {
+    let best = -1, bestVal = 0;
+    for (let i = from; i < to; i++) {
+      if (arr[i] > bestVal) { bestVal = arr[i]; best = i; }
+    }
+    return best;
+  }
 
-  let left = 0, right = sw - 1, top = 0, bottom = sh - 1;
-  for (let x = 0; x < sw; x++)      if (colSum[x] >= colThresh) { left = x; break; }
-  for (let x = sw - 1; x >= 0; x--) if (colSum[x] >= colThresh) { right = x; break; }
-  for (let y = 0; y < sh; y++)      if (rowSum[y] >= rowThresh) { top = y; break; }
-  for (let y = sh - 1; y >= 0; y--) if (rowSum[y] >= rowThresh) { bottom = y; break; }
+  const midX = Math.floor(sw / 2);
+  const midY = Math.floor(sh / 2);
 
-  // Document must cover at least 20% of image dimensions
-  if ((right - left) < sw * 0.20 || (bottom - top) < sh * 0.20) return null;
+  const leftPeak  = peakInRange(sc, xb, midX);
+  const rightPeak = peakInRange(sc, midX, sw - xb);
+  const topPeak   = peakInRange(sr, yb, midY);
+  const botPeak   = peakInRange(sr, midY, sh - yb);
 
-  // Slight inward padding (1%) so handles sit just inside the document edge
-  const px = sw * 0.015;
-  const py = sh * 0.015;
+  if (leftPeak < 0 || rightPeak < 0 || topPeak < 0 || botPeak < 0) return null;
+
+  const docW = rightPeak - leftPeak;
+  const docH = botPeak - topPeak;
+
+  // Must be a reasonable document size
+  if (docW < sw * 0.15 || docH < sh * 0.15) return null;
+
+  // Tiny inward nudge so handles sit inside, not on, the edge line
+  const px = sw * 0.01;
+  const py = sh * 0.01;
 
   return {
-    left: Math.max(0, (left + px)) / sw,
-    top: Math.max(0, (top + py)) / sh,
-    right: Math.min(sw, (right - px)) / sw,
-    bottom: Math.min(sh, (bottom - py)) / sh,
+    left:   Math.max(0,  leftPeak  + px) / sw,
+    top:    Math.max(0,  topPeak   + py) / sh,
+    right:  Math.min(sw, rightPeak - px) / sw,
+    bottom: Math.min(sh, botPeak   - py) / sh,
   };
 }
 

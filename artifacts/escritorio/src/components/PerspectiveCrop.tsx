@@ -163,7 +163,7 @@ export function PerspectiveCrop({ imageSrc: initialSrc, autoCorners, onConfirm, 
     const w = ir.width;
     const h = ir.height;
     setImgRect({ x, y, w, h });
-    // Use auto-detected corners if available, else fall back to 5% inset
+    // Use auto-detected corners if available, else fall back to 15% inset
     if (autoCorners) {
       setCorners([
         { x: x + autoCorners.left * w,   y: y + autoCorners.top * h },    // TL
@@ -173,8 +173,8 @@ export function PerspectiveCrop({ imageSrc: initialSrc, autoCorners, onConfirm, 
       ]);
       return;
     }
-    const padX = w * 0.05;
-    const padY = h * 0.05;
+    const padX = w * 0.15;
+    const padY = h * 0.15;
     setCorners([
       { x: x + padX,       y: y + padY },
       { x: x + w - padX,   y: y + padY },
