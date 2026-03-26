@@ -43,18 +43,47 @@ Digite o e-mail e senha da conta expo.dev do escritório.
 ### 2.1 Acessar o projeto no Replit
 1. Acesse: **replit.com** e entre na conta do projeto
 2. Abra o projeto **Mendes Advocacia / Promarcos**
-3. No menu lateral do Replit, clique nos três pontos `...` → **Download as zip**
+3. No painel superior direito, clique em **"File tree"** para abrir o explorador de arquivos
+4. Passe o mouse sobre a **pasta raiz** (primeira pasta no topo da lista)
+5. Clique nos **três pontinhos `⋯`** que aparecem ao lado do nome da pasta
+6. Selecione **"Download"** — isso baixa todo o projeto como `.zip`
 
-### 2.2 Extrair e acessar a pasta do app
-```bash
-cd caminho/para/pasta/extraida
-cd artifacts/scanner-mobile
+### 2.2 Extrair o zip e entrar na pasta RAIZ
+
+> ⚠️ **ATENÇÃO:** Instale as dependências na pasta RAIZ do projeto, não dentro de `artifacts/scanner-mobile`. O projeto usa um workspace compartilhado (pnpm workspace).
+
+A estrutura de pastas é assim:
+```
+📁 workspace/                  ← PASTA RAIZ — entre aqui primeiro
+  📁 artifacts/
+    📁 scanner-mobile/         ← pasta do app mobile
+    📁 escritorio/
+    📁 api-server/
+  📄 pnpm-workspace.yaml       ← confirma que é a pasta raiz
+  📄 package.json
 ```
 
-### 2.3 Instalar as dependências
+No Terminal:
 ```bash
+# Entre na pasta RAIZ (onde está o arquivo pnpm-workspace.yaml)
+cd caminho/para/pasta/extraida/workspace
+```
+
+### 2.3 Instalar as dependências (na pasta RAIZ)
+```bash
+# Instalar o pnpm caso não tenha
 npm install -g pnpm
+
+# Instalar TODAS as dependências do projeto (rodar na pasta RAIZ)
 pnpm install
+```
+
+> Se aparecer o erro `Cannot determine which native SDK version...`, significa que o `pnpm install` não foi rodado na pasta raiz. Volte um nível (`cd ..`) e rode novamente.
+
+### 2.4 Entrar na pasta do app mobile
+```bash
+# Só depois do pnpm install na raiz, entre na pasta do app
+cd artifacts/scanner-mobile
 ```
 
 ---
