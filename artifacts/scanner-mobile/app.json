@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "Mendes Advocacia",
+    "slug": "scanner-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "mendesadvocacia",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1E3A5F"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.mendesadvocacia.scanner",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Usado para escanear documentos dos clientes",
+        "NSPhotoLibraryUsageDescription": "Salvar documentos escaneados na galeria",
+        "NSPhotoLibraryAddUsageDescription": "Salvar documentos escaneados na galeria"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#1E3A5F"
+      },
+      "package": "br.com.mendesadvocacia.scanner",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Acesso às fotos para selecionar documentos",
+          "cameraPermission": "Acesso à câmera para escanear documentos"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Salvar documentos escaneados na galeria",
+          "savePhotosPermission": "Salvar documentos escaneados na galeria",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

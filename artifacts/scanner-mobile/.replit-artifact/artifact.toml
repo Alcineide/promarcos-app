@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/scanner-mobile/"
+title = "Mendes Advocacia Scanner"
+version = "1.0.0"
+id = "artifacts/scanner-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/scanner-mobile/" ]
+localPort = 24800
+
+[services.development]
+run = "pnpm --filter @workspace/scanner-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/scanner-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/scanner-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "24800"
+BASE_PATH = "/scanner-mobile/"

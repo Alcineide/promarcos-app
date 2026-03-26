@@ -279,23 +279,25 @@ router.get("/promarcos/folharosto/:pessoaId", async (req, res) => {
 
 router.post("/promarcos/arquivo", async (req, res) => {
   try {
-    const { pessoaCodigo, fileName, fileBase64, tipo, nome } = req.body as {
+    const { pessoaCodigo, fileName, fileBase64, tipo, nome, mimeType } = req.body as {
       pessoaCodigo: number;
       fileName: string;
       fileBase64: string;
       tipo?: string;
       nome?: string;
+      mimeType?: string;
     };
 
     const pessoaJson = JSON.stringify({ codigo: pessoaCodigo });
     const fileBuffer = Buffer.from(fileBase64, "base64");
-    const blob = new Blob([fileBuffer], { type: "application/pdf" });
+    const resolvedMime = mimeType || (fileName?.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+    const blob = new Blob([fileBuffer], { type: resolvedMime });
 
     const form = new globalThis.FormData();
     form.append("pessoa", pessoaJson);
-    form.append("arquivos", blob, fileName || "folha_rosto.pdf");
-    form.append("tipos", tipo || "Folha de Rosto");
-    form.append("nomes", nome || "Folha de Rosto");
+    form.append("arquivos", blob, fileName || "documento.jpg");
+    form.append("tipos", tipo || "Documento");
+    form.append("nomes", nome || fileName || "Documento");
 
     const upstream = await fetch(`${PROMARCOS_BASE}/pessoas/arquivo`, {
       method: "POST",
@@ -309,6 +311,38 @@ router.post("/promarcos/arquivo", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(502).json({ sucesso: false, mensagem: "Erro ao enviar arquivo ao Promarcos" });
+  }
+});
+
+router.post("/promarcos/login", async (req, res) => {
+  try {
+    const { email, senha } = req.body as { email: string; senha: string };
+    const upstream = await fetch(`${PROMARCOS_BASE}/usuarios/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, senha }),
+    });
+    const text = await upstream.text();
+    let data: unknown;
+    try { data = JSON.parse(text); } catch { data = { mensagem: text }; }
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json({ mensagem: "Erro ao conectar com o servidor" });
+  }
+});
+
+router.get("/promarcos/pessoas/arquivos/:pessoaCodigo", async (req, res) => {
+  try {
+    const { pessoaCodigo } = req.params;
+    const upstream = await fetch(`${PROMARCOS_BASE}/pessoas/arquivo/${pessoaCodigo}`);
+    const text = await upstream.text();
+    let data: unknown;
+    try { data = JSON.parse(text); } catch { data = { mensagem: text }; }
+    res.status(upstream.status).json(data);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json([]);
   }
 });
 
