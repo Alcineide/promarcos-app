@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
@@ -17,7 +18,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiPost } from "@/config/api";
 import type { PromarcoUser } from "@/contexts/AuthContext";
@@ -77,195 +77,215 @@ export default function LoginScreen() {
     }
   }
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    <LinearGradient
+      colors={["#1d4ed8", "#1e40af", "#1e3a8a"]}
+      style={styles.gradient}
     >
-      <ScrollView
+      <KeyboardAvoidingView
         style={styles.flex}
-        contentContainerStyle={[styles.scroll, { paddingTop: topPad + 32, paddingBottom: insets.bottom + 32 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <View style={styles.logoArea}>
-          <View style={styles.logoBox}>
-            <Feather name="briefcase" size={40} color={Colors.accent} />
-          </View>
-          <Text style={styles.appName}>Mendes Advocacia</Text>
-          <Text style={styles.appSub}>Scanner de Documentos</Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Entrar</Text>
-          <Text style={styles.cardSub}>Use suas credenciais do Promarcos</Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>E-mail</Text>
-            <View style={styles.inputRow}>
-              <Feather name="mail" size={18} color={Colors.textMuted} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="seu@email.com"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="next"
-                onSubmitEditing={() => senhaRef.current?.focus()}
-                testID="email-input"
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingTop: (Platform.OS === "web" ? 67 : insets.top) + 40, paddingBottom: insets.bottom + 32 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.card}>
+            {/* Logo */}
+            <View style={styles.logoRow}>
+              <Image
+                source={require("../assets/images/icon.png")}
+                style={styles.logoImg}
+                resizeMode="contain"
               />
             </View>
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Senha</Text>
-            <View style={styles.inputRow}>
-              <Feather name="lock" size={18} color={Colors.textMuted} style={styles.inputIcon} />
-              <TextInput
-                ref={senhaRef}
-                style={styles.input}
-                value={senha}
-                onChangeText={setSenha}
-                placeholder="••••••••"
-                placeholderTextColor={Colors.textMuted}
-                secureTextEntry={!showSenha}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="go"
-                onSubmitEditing={handleLogin}
-                testID="senha-input"
-              />
-              <Pressable onPress={() => setShowSenha(!showSenha)} hitSlop={8}>
-                <Feather name={showSenha ? "eye-off" : "eye"} size={18} color={Colors.textMuted} />
-              </Pressable>
+            {/* Title */}
+            <Text style={styles.title}>PROMARCOS</Text>
+            <Text style={styles.subtitle}>Sistema de Gestão Jurídica</Text>
+
+            {/* Email */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>E-mail <Text style={styles.required}>*</Text></Text>
+              <View style={styles.inputRow}>
+                <Feather name="mail" size={17} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="seu@email.com"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => senhaRef.current?.focus()}
+                  testID="email-input"
+                />
+              </View>
             </View>
+
+            {/* Senha */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Senha <Text style={styles.required}>*</Text></Text>
+              <View style={styles.inputRow}>
+                <Feather name="lock" size={17} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  ref={senhaRef}
+                  style={styles.input}
+                  value={senha}
+                  onChangeText={setSenha}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9ca3af"
+                  secureTextEntry={!showSenha}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  onSubmitEditing={handleLogin}
+                  testID="senha-input"
+                />
+                <Pressable onPress={() => setShowSenha(!showSenha)} hitSlop={10}>
+                  <Feather name={showSenha ? "eye-off" : "eye"} size={18} color="#6b7280" />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Botão */}
+            <Pressable
+              style={({ pressed }) => [styles.btn, { opacity: pressed ? 0.85 : 1 }]}
+              onPress={handleLogin}
+              disabled={loading}
+              testID="login-btn"
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={styles.btnInner}>
+                  <Feather name="log-in" size={18} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={styles.btnText}>ENTRAR</Text>
+                </View>
+              )}
+            </Pressable>
+
+            {/* Footer */}
+            <Text style={styles.footer}>
+              © 2026 Promarcos • Todos os direitos reservados
+            </Text>
           </View>
-
-          <Pressable
-            style={({ pressed }) => [styles.btn, { opacity: pressed ? 0.85 : 1 }]}
-            onPress={handleLogin}
-            disabled={loading}
-            testID="login-btn"
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.btnText}>Entrar</Text>
-            )}
-          </Pressable>
-        </View>
-
-        <Text style={styles.footer}>
-          Mendes Advocacia · Promarcos v2
-        </Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: 24, flexGrow: 1, justifyContent: "center" },
-  logoArea: { alignItems: "center", marginBottom: 36 },
-  logoBox: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: Colors.primary,
+  gradient: { flex: 1 },
+  flex: { flex: 1 },
+  scroll: {
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    paddingHorizontal: 24,
   },
-  appName: {
-    fontSize: 24,
-    fontFamily: "Inter_700Bold",
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  appSub: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    color: Colors.textSecondary,
-  },
+
   card: {
-    backgroundColor: Colors.card,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 16,
-    elevation: 4,
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingHorizontal: 32,
+    paddingTop: 36,
+    paddingBottom: 28,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 12,
   },
-  cardTitle: {
+
+  logoRow: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  logoImg: {
+    width: 120,
+    height: 56,
+  },
+
+  title: {
     fontSize: 22,
     fontFamily: "Inter_700Bold",
-    color: Colors.text,
+    color: "#1e3a8a",
+    textAlign: "center",
+    letterSpacing: 2,
     marginBottom: 4,
   },
-  cardSub: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    color: Colors.textSecondary,
-    marginBottom: 24,
-  },
-  inputGroup: { marginBottom: 16 },
-  label: {
+  subtitle: {
     fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.text,
-    marginBottom: 8,
+    fontFamily: "Inter_400Regular",
+    color: "#6b7280",
+    textAlign: "center",
+    marginBottom: 28,
   },
+
+  fieldGroup: { marginBottom: 16 },
+  label: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: "#374151",
+    marginBottom: 6,
+  },
+  required: { color: "#ef4444" },
+
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.background,
-    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 14,
-    height: 50,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 48,
+    backgroundColor: "#fff",
   },
   inputIcon: { marginRight: 10 },
   input: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: "Inter_400Regular",
-    color: Colors.text,
+    color: "#111827",
   },
+
   btn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    height: 52,
+    backgroundColor: "#2563eb",
+    borderRadius: 8,
+    height: 50,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
-    shadowColor: Colors.primary,
+    shadowColor: "#1d4ed8",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 6,
   },
+  btnInner: { flexDirection: "row", alignItems: "center" },
   btnText: {
     color: "#fff",
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 1.5,
   },
+
   footer: {
     textAlign: "center",
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_400Regular",
-    color: Colors.textMuted,
-    marginTop: 32,
+    color: "#9ca3af",
+    marginTop: 24,
   },
 });
