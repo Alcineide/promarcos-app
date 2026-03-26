@@ -12,6 +12,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Layout } from "@/components/layout";
 import { FormInput } from "@/components/form-input";
+import { DocumentScanner } from "@/components/DocumentScanner";
 import { cn, formatCEP, formatCPF, formatPhone, formatDate } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -771,6 +772,25 @@ export default function ClientForm() {
       setUploadDone(true);
     } else {
       toast({ title: failCount === capturedFiles.length ? "Falha no envio" : "Parcialmente enviado", description: `${successCount} enviado(s), ${failCount} com falha.`, variant: "destructive" });
+    }
+  };
+
+  const handleDocScannerUpload = async (pages: Array<{ id: string; dataUrl: string; blob: Blob; fileName: string }>) => {
+    if (!promarcosCodigo || !scannerModal) throw new Error("Cliente não vinculado ao Promarcos");
+    const nomeCliente = clientData?.nomeCompleto || "";
+    let successCount = 0;
+    let failCount = 0;
+    for (const page of pages) {
+      const file = new File([page.blob], page.fileName, { type: "image/jpeg" });
+      const result = await uploadArquivoPromarcos(
+        promarcosCodigo, file, page.fileName, scannerModal.tipo,
+        `${scannerModal.tipo}${nomeCliente ? ` - ${nomeCliente}` : ""}`,
+      );
+      if (result.sucesso) successCount++; else failCount++;
+    }
+    if (failCount > 0) {
+      toast({ title: failCount === pages.length ? "Falha no envio" : "Parcialmente enviado", description: `${successCount} enviado(s), ${failCount} com falha.`, variant: "destructive" });
+      if (failCount === pages.length) throw new Error("Falha ao enviar todas as páginas");
     }
   };
 
@@ -1843,129 +1863,26 @@ export default function ClientForm() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-6"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm"
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="bg-white rounded-2xl w-full max-w-sm md:max-w-md flex flex-col overflow-hidden shadow-2xl"
-              style={{ maxHeight: "90vh", minHeight: capturedFiles.length > 0 ? "420px" : "auto" }}
+              initial={{ scale: 0.97, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.97, opacity: 0 }}
+              className="w-full h-full md:w-auto md:h-auto md:max-w-sm md:max-h-[90vh] md:rounded-2xl overflow-hidden shadow-2xl bg-black flex flex-col"
+              style={{ minHeight: "min(100vh, 640px)" }}
             >
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 flex-shrink-0 bg-gradient-to-r from-primary to-primary/90">
-                <div>
-                  <p className="text-xs text-primary-foreground/70 font-medium uppercase tracking-wide">Anexar Documento</p>
-                  <h3 className="text-lg font-bold text-primary-foreground">{scannerModal.tipo}</h3>
-                </div>
-                <button
-                  onClick={() => setScannerModal(null)}
-                  className="p-2 rounded-full text-primary-foreground/80 hover:bg-white/20 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="flex-1 overflow-y-auto px-5 py-5">
-                {uploadDone ? (
-                  /* Success state */
-                  <div className="flex flex-col items-center justify-center h-full gap-4 py-8">
-                    <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-                      <CheckCircle className="w-10 h-10 text-green-600" />
-                    </div>
-                    <p className="text-lg font-bold text-green-700 text-center">Enviado com sucesso!</p>
-                    <p className="text-sm text-muted-foreground text-center">
-                      {capturedFiles.length} arquivo(s) salvos na pasta do cliente no Promarcos.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => { setCapturedFiles([]); setCapturedPreviews([]); setUploadDone(false); }}
-                      className="mt-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors"
-                    >
-                      Anexar mais documentos
-                    </button>
-                  </div>
-                ) : capturedFiles.length === 0 ? (
-                  /* Empty state - choose source */
-                  <div className="flex flex-col items-center justify-center h-full gap-5 py-6">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center">
-                      <Camera className="w-8 h-8 text-amber-600" />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-semibold text-foreground mb-1">Adicionar documento</p>
-                      <p className="text-xs text-muted-foreground">Tire uma foto ou selecione da galeria</p>
-                    </div>
-                    <div className="flex flex-col gap-3 w-full max-w-xs">
-                      <button
-                        type="button"
-                        onClick={openCameraInput}
-                        className="flex items-center justify-center gap-3 w-full px-5 py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-base shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all"
-                      >
-                        <Camera className="w-5 h-5" />
-                        Tirar Foto com a Câmera
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openGalleryInput}
-                        className="flex items-center justify-center gap-3 w-full px-5 py-4 rounded-2xl border-2 border-amber-500/40 bg-amber-50 text-amber-800 font-semibold text-base hover:bg-amber-100 active:scale-95 transition-all"
-                      >
-                        <ImageIcon className="w-5 h-5" />
-                        Galeria / Arquivo
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  /* Preview state */
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-sm">{capturedFiles.length} foto(s) selecionada(s)</p>
-                      <button type="button" onClick={openCameraInput} className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
-                        <Camera className="w-3.5 h-3.5" /> Adicionar
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {capturedPreviews.map((url, i) => (
-                        <div key={i} className="relative aspect-[3/4] rounded-lg overflow-hidden bg-muted border border-border">
-                          <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              URL.revokeObjectURL(url);
-                              setCapturedFiles(prev => prev.filter((_, j) => j !== i));
-                              setCapturedPreviews(prev => prev.filter((_, j) => j !== i));
-                            }}
-                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                          <span className="absolute bottom-1 left-1 text-xs font-bold bg-black/50 text-white rounded px-1">{i + 1}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              {!uploadDone && capturedFiles.length > 0 && (
-                <div className="px-5 py-4 border-t border-border/40 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleUploadCaptured}
-                    disabled={uploadingFiles}
-                    className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-green-600 text-white font-bold text-base shadow-lg hover:bg-green-700 active:scale-95 transition-all disabled:opacity-60"
-                  >
-                    {uploadingFiles ? (
-                      <><Loader2 className="w-5 h-5 animate-spin" /> Enviando para o Promarcos...</>
-                    ) : (
-                      <><Upload className="w-5 h-5" /> Enviar {capturedFiles.length} arquivo(s) ao Promarcos</>
-                    )}
-                  </button>
-                </div>
-              )}
+              <DocumentScanner
+                tipoDcumento={scannerModal.tipo}
+                clienteNome={clientData?.nomeCompleto || ""}
+                onUpload={handleDocScannerUpload}
+                onClose={() => {
+                  setScannerModal(null);
+                  setCapturedFiles([]);
+                  setCapturedPreviews([]);
+                  setUploadDone(false);
+                }}
+              />
             </motion.div>
           </motion.div>
         )}
