@@ -43,6 +43,9 @@
     "web": {
       "favicon": "./assets/images/icon.png"
     },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "plugins": [
       [
         "expo-router",
@@ -50,6 +53,7 @@
           "origin": "https://replit.com/"
         }
       ],
+      "expo-updates",
       "expo-font",
       "expo-web-browser",
       [

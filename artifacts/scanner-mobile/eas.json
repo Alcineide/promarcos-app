@@ -13,14 +13,20 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "ios": {
         "simulator": false
       },
-      "channel": "preview"
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      }
     }
   },
   "submit": {
