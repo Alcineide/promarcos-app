@@ -59,7 +59,7 @@
     "expo-camera": "^17.0.10",
     "expo-file-system": "^19.0.21",
     "expo-media-library": "^18.2.1",
-    "expo-print": "^55.0.9",
+    "expo-print": "^15.0.8",
     "expo-secure-store": "^15.0.8",
     "react-native-document-scanner-plugin": "^2.0.4"
   }
