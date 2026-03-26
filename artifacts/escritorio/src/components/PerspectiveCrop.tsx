@@ -3,8 +3,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
 type Point = { x: number; y: number };
 
+interface AutoCorners { left: number; top: number; right: number; bottom: number }
+
 interface PerspectiveCropProps {
   imageSrc: string;
+  autoCorners?: AutoCorners; // fractions [0-1] of image width/height
   onConfirm: (croppedBlob: Blob, dataUrl: string) => void;
   onRetake: () => void;
 }
@@ -137,7 +140,7 @@ const HIT_R = 36;   // px — hit radius (larger than visual for easier touch)
 const CORNER_LABELS = ["TL", "TR", "BR", "BL"];
 const CORNER_COLORS = ["#3B82F6", "#3B82F6", "#3B82F6", "#3B82F6"];
 
-export function PerspectiveCrop({ imageSrc: initialSrc, onConfirm, onRetake }: PerspectiveCropProps) {
+export function PerspectiveCrop({ imageSrc: initialSrc, autoCorners, onConfirm, onRetake }: PerspectiveCropProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -160,6 +163,16 @@ export function PerspectiveCrop({ imageSrc: initialSrc, onConfirm, onRetake }: P
     const w = ir.width;
     const h = ir.height;
     setImgRect({ x, y, w, h });
+    // Use auto-detected corners if available, else fall back to 5% inset
+    if (autoCorners) {
+      setCorners([
+        { x: x + autoCorners.left * w,   y: y + autoCorners.top * h },    // TL
+        { x: x + autoCorners.right * w,  y: y + autoCorners.top * h },    // TR
+        { x: x + autoCorners.right * w,  y: y + autoCorners.bottom * h }, // BR
+        { x: x + autoCorners.left * w,   y: y + autoCorners.bottom * h }, // BL
+      ]);
+      return;
+    }
     const padX = w * 0.05;
     const padY = h * 0.05;
     setCorners([
@@ -168,7 +181,7 @@ export function PerspectiveCrop({ imageSrc: initialSrc, onConfirm, onRetake }: P
       { x: x + w - padX,   y: y + h - padY },
       { x: x + padX,       y: y + h - padY },
     ]);
-  }, []);
+  }, [autoCorners]);
 
   useEffect(() => {
     window.addEventListener("resize", initCorners);

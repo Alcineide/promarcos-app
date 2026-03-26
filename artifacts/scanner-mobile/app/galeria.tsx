@@ -13,9 +13,11 @@ import {
   Text,
   View,
 } from "react-native";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
 
 const BASE_DIR = FileSystem.documentDirectory + "MendesAdvocacia/";
 
@@ -67,6 +69,7 @@ export default function GaleriaScreen() {
   const titulo = params.titulo ?? "Galeria";
   const isRoot = currentDir === BASE_DIR;
 
+  const { logout } = useAuth();
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -110,6 +113,20 @@ export default function GaleriaScreen() {
   useEffect(() => { loadDir(); }, [loadDir]);
 
   function handleRefresh() { setRefreshing(true); loadDir(); }
+
+  async function handleLogout() {
+    Alert.alert("Sair", "Deseja encerrar a sessão?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Sair",
+        style: "destructive",
+        onPress: async () => {
+          await logout();
+          router.replace("/login");
+        },
+      },
+    ]);
+  }
 
   function openEntry(entry: DirEntry) {
     if (entry.isDir) {
@@ -172,9 +189,18 @@ export default function GaleriaScreen() {
             {isRoot ? "Documentos salvos por cliente" : `${entries.length} item${entries.length !== 1 ? "s" : ""}`}
           </Text>
         </View>
-        <Pressable onPress={handleRefresh} style={styles.refreshBtn} hitSlop={8}>
-          <Feather name="refresh-cw" size={20} color={Colors.primary} />
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          <Pressable onPress={handleRefresh} style={styles.refreshBtn} hitSlop={8}>
+            <Feather name="refresh-cw" size={20} color={Colors.primary} />
+          </Pressable>
+          <Pressable
+            onPress={handleLogout}
+            style={[styles.refreshBtn, { backgroundColor: "#FFF5F5", borderColor: "#FED7D7" }]}
+            hitSlop={8}
+          >
+            <Feather name="log-out" size={18} color="#E53E3E" />
+          </Pressable>
+        </View>
       </View>
 
       {/* List */}

@@ -20,9 +20,105 @@ function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
 }
 
-// "camera" → user captures → "crop" → user adjusts corners → back to "camera" (page added) or "review"
 type ScanStep = "camera" | "crop" | "review" | "done";
 
+// ---------------------------------------------------------------------------
+// Auto document edge detection using Sobel edge + projection analysis
+// Returns corners as fractions [0-1] of image dimensions, or null
+// ---------------------------------------------------------------------------
+type AutoCorners = { left: number; top: number; right: number; bottom: number };
+
+function detectDocumentCorners(canvas: HTMLCanvasElement): AutoCorners | null {
+  const MAX = 480;
+  const sw = Math.min(canvas.width, MAX);
+  const sh = Math.round(canvas.height * (sw / canvas.width));
+
+  const small = document.createElement("canvas");
+  small.width = sw;
+  small.height = sh;
+  small.getContext("2d")!.drawImage(canvas, 0, 0, sw, sh);
+  const { data } = small.getContext("2d")!.getImageData(0, 0, sw, sh);
+
+  // Grayscale
+  const gray = new Uint8Array(sw * sh);
+  for (let i = 0; i < sw * sh; i++) {
+    gray[i] = (data[i * 4] * 77 + data[i * 4 + 1] * 150 + data[i * 4 + 2] * 29) >> 8;
+  }
+
+  // Box blur 5×5
+  const blurred = new Float32Array(sw * sh);
+  const r = 2;
+  for (let y = r; y < sh - r; y++) {
+    for (let x = r; x < sw - r; x++) {
+      let s = 0;
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++) s += gray[(y + dy) * sw + (x + dx)];
+      blurred[y * sw + x] = s / 25;
+    }
+  }
+
+  // Sobel edge magnitude
+  const mags = new Float32Array(sw * sh);
+  let maxMag = 0;
+  for (let y = 1; y < sh - 1; y++) {
+    for (let x = 1; x < sw - 1; x++) {
+      const gx =
+        -blurred[(y - 1) * sw + x - 1] - 2 * blurred[y * sw + x - 1] - blurred[(y + 1) * sw + x - 1] +
+         blurred[(y - 1) * sw + x + 1] + 2 * blurred[y * sw + x + 1] + blurred[(y + 1) * sw + x + 1];
+      const gy =
+        -blurred[(y - 1) * sw + x - 1] - 2 * blurred[(y - 1) * sw + x] - blurred[(y - 1) * sw + x + 1] +
+         blurred[(y + 1) * sw + x - 1] + 2 * blurred[(y + 1) * sw + x] + blurred[(y + 1) * sw + x + 1];
+      const mag = Math.sqrt(gx * gx + gy * gy);
+      mags[y * sw + x] = mag;
+      if (mag > maxMag) maxMag = mag;
+    }
+  }
+
+  if (maxMag < 10) return null;
+
+  // Projection onto rows and columns
+  const threshold = maxMag * 0.15;
+  const colSum = new Float32Array(sw);
+  const rowSum = new Float32Array(sh);
+  let totalEdge = 0;
+
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const m = mags[y * sw + x];
+      if (m > threshold) { colSum[x] += m; rowSum[y] += m; totalEdge++; }
+    }
+  }
+
+  if (totalEdge < 80) return null;
+
+  const maxCol = Math.max(...colSum);
+  const maxRow = Math.max(...rowSum);
+  const colThresh = maxCol * 0.06;
+  const rowThresh = maxRow * 0.06;
+
+  let left = 0, right = sw - 1, top = 0, bottom = sh - 1;
+  for (let x = 0; x < sw; x++)       if (colSum[x] > colThresh) { left = x; break; }
+  for (let x = sw - 1; x >= 0; x--)  if (colSum[x] > colThresh) { right = x; break; }
+  for (let y = 0; y < sh; y++)        if (rowSum[y] > rowThresh) { top = y; break; }
+  for (let y = sh - 1; y >= 0; y--)   if (rowSum[y] > rowThresh) { bottom = y; break; }
+
+  // Must cover at least 25% of image
+  if ((right - left) < sw * 0.25 || (bottom - top) < sh * 0.25) return null;
+
+  // Small inward padding so corners land inside, not on, the edge
+  const px = sw * 0.01, py = sh * 0.01;
+
+  return {
+    left: Math.max(0, left - px) / sw,
+    top: Math.max(0, top - py) / sh,
+    right: Math.min(sw, right + px) / sw,
+    bottom: Math.min(sh, bottom + py) / sh,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }: DocumentScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,7 +126,8 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
 
   const [step, setStep] = useState<ScanStep>("camera");
   const [pages, setPages] = useState<CapturedPage[]>([]);
-  const [pendingCapture, setPendingCapture] = useState<string | null>(null); // dataUrl awaiting crop
+  const [pendingCapture, setPendingCapture] = useState<string | null>(null);
+  const [pendingAutoCorners, setPendingAutoCorners] = useState<AutoCorners | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
@@ -68,18 +165,9 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
   }, []);
 
   useEffect(() => {
-    if (step === "camera") {
-      startCamera(facingMode);
-    } else {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    return () => {
-      if (step !== "camera") {
-        streamRef.current?.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-    };
+    if (step === "camera") startCamera(facingMode);
+    else { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    return () => { if (step !== "camera") { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; } };
   }, [step, facingMode, startCamera]);
 
   useEffect(() => () => { streamRef.current?.getTracks().forEach((t) => t.stop()); }, []);
@@ -101,8 +189,11 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     setFlash(true);
     setTimeout(() => setFlash(false), 150);
+    // Run auto-detection BEFORE going to crop step
+    const detected = detectDocumentCorners(canvas);
     const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
     setPendingCapture(dataUrl);
+    setPendingAutoCorners(detected);
     setStep("crop");
   }
 
@@ -112,11 +203,13 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
     const fileName = `${safeName}_${tipoDcumento.replace(/\s+/g, "_")}_${ts}_p${pages.length + 1}.jpg`;
     setPages((prev) => [...prev, { id: makeId(), dataUrl, blob, fileName }]);
     setPendingCapture(null);
+    setPendingAutoCorners(null);
     setStep("camera");
   }
 
   function handleCropRetake() {
     setPendingCapture(null);
+    setPendingAutoCorners(null);
     setStep("camera");
   }
 
@@ -127,14 +220,9 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
   async function handleSend() {
     if (pages.length === 0) return;
     setUploading(true);
-    try {
-      await onUpload(pages);
-      setStep("done");
-    } catch {
-      // handled by caller
-    } finally {
-      setUploading(false);
-    }
+    try { await onUpload(pages); setStep("done"); }
+    catch { /* handled by caller */ }
+    finally { setUploading(false); }
   }
 
   // ---- DONE ----
@@ -162,6 +250,7 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
     return (
       <PerspectiveCrop
         imageSrc={pendingCapture}
+        autoCorners={pendingAutoCorners ?? undefined}
         onConfirm={handleCropConfirm}
         onRetake={handleCropRetake}
       />
@@ -200,9 +289,7 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
               {pages.map((page, idx) => (
                 <div key={page.id} className="relative rounded-xl overflow-hidden border border-border shadow-sm aspect-[3/4] bg-muted">
                   <img src={page.dataUrl} alt={`Página ${idx + 1}`} className="w-full h-full object-cover" />
-                  <div className="absolute bottom-1 left-1 bg-black/60 text-white text-xs font-semibold px-2 py-0.5 rounded-md">
-                    Pág. {idx + 1}
-                  </div>
+                  <div className="absolute bottom-1 left-1 bg-black/60 text-white text-xs font-semibold px-2 py-0.5 rounded-md">Pág. {idx + 1}</div>
                   <button
                     onClick={() => removePage(page.id)}
                     className="absolute top-1 right-1 w-7 h-7 bg-red-500/90 hover:bg-red-500 rounded-full flex items-center justify-center transition-colors"
@@ -232,7 +319,7 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
     );
   }
 
-  // ---- CAMERA (default) ----
+  // ---- CAMERA ----
   return (
     <div className="flex flex-col h-full bg-black relative overflow-hidden">
       {flash && <div className="absolute inset-0 bg-white z-50 opacity-90 pointer-events-none" />}
@@ -256,7 +343,7 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
             style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
           />
 
-          {/* Document frame guide overlay */}
+          {/* Document frame guide */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="relative" style={{ width: "75%", aspectRatio: "0.707" }}>
               {[
@@ -291,7 +378,7 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
               Posicione o documento dentro das marcas e toque em Escanear
             </p>
             <div className="flex items-center justify-between">
-              {/* Last thumbnail */}
+              {/* Thumbnail */}
               <div className="w-16 flex items-center justify-center">
                 {pages.length > 0 ? (
                   <button onClick={() => setStep("review")} className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-white shadow-lg">

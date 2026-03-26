@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { apiPost } from "@/config/api";
 import Colors from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
 import { QueuedDoc, useScanQueue } from "@/contexts/ScanQueue";
 
 const CATEGORIAS = [
@@ -112,6 +113,7 @@ export default function ClienteScreen() {
   const params = useLocalSearchParams<{ id: string; nome: string; cpf: string }>();
   const { id, nome, cpf } = params;
 
+  const { logout } = useAuth();
   const { queue, removeFromQueue, clearClientQueue } = useScanQueue();
   const clientQueue = queue.filter((d) => d.clienteId === id);
   const totalPages = clientQueue.reduce((acc, d) => acc + d.pages.length, 0);
@@ -131,6 +133,21 @@ export default function ClienteScreen() {
     .substring(0, 60);
   const clienteDir = `${documentDirectory}MendesAdvocacia/${clienteSafeName}/`;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  async function handleLogout() {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert("Sair", "Deseja encerrar a sessão?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Sair",
+        style: "destructive",
+        onPress: async () => {
+          await logout();
+          router.replace("/login");
+        },
+      },
+    ]);
+  }
 
   function handleCategoria(catId: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -214,23 +231,26 @@ export default function ClienteScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
           <Feather name="arrow-left" size={22} color={Colors.text} />
         </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>Documentos</Text>
-        {Platform.OS !== "web" ? (
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/galeria",
-                params: { dir: clienteDir, titulo: clienteSafeName || nome },
-              })
-            }
-            style={styles.galeriaBtn}
-            hitSlop={10}
-          >
-            <Feather name="folder" size={20} color={Colors.primary} />
+        <Text style={styles.headerTitle} numberOfLines={1}>{nome?.split(" ")[0]}</Text>
+        <View style={styles.headerRight}>
+          {Platform.OS !== "web" && (
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/galeria",
+                  params: { dir: clienteDir, titulo: clienteSafeName || nome },
+                })
+              }
+              style={styles.headerIconBtn}
+              hitSlop={8}
+            >
+              <Feather name="folder" size={20} color={Colors.primary} />
+            </Pressable>
+          )}
+          <Pressable onPress={handleLogout} style={[styles.headerIconBtn, styles.logoutBtn]} hitSlop={8}>
+            <Feather name="log-out" size={18} color="#E53E3E" />
           </Pressable>
-        ) : (
-          <View style={{ width: 40 }} />
-        )}
+        </View>
       </View>
 
       <ScrollView
@@ -378,7 +398,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  galeriaBtn: {
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  headerIconBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
@@ -387,6 +412,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  logoutBtn: {
+    backgroundColor: "#FFF5F5",
+    borderColor: "#FED7D7",
   },
   headerTitle: {
     fontSize: 18,
