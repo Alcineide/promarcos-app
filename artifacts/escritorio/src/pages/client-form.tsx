@@ -659,24 +659,50 @@ export default function ClientForm() {
   };
 
   const handleFileUpload = async (tipo: string) => {
-    // Mocking file selection
+    if (!promarcosCodigo) {
+      toast({ title: "Cliente não vinculado", description: "Este cliente não possui vínculo com o Promarcos. Salve o cliente primeiro.", variant: "destructive" });
+      return;
+    }
+
     const input = document.createElement('input');
     input.type = 'file';
+    input.accept = 'image/*,application/pdf';
+    input.multiple = true;
+
     input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        try {
-          await createAnexo.mutateAsync({ 
-            id: clientId, 
-            data: { tipo, nomeArquivo: file.name, fileData: "base64mock..." } 
-          });
-          toast({ title: "Upload Completo", description: `${file.name} anexado.` });
-          queryClient.invalidateQueries({ queryKey: [`/api/clientes/${clientId}/anexos`] });
-        } catch {
-          toast({ title: "Erro", description: "Falha no upload", variant: "destructive" });
+      const files = Array.from((e.target as HTMLInputElement).files || []);
+      if (files.length === 0) return;
+
+      toast({ title: "Enviando...", description: `Enviando ${files.length} arquivo(s) para o Promarcos...` });
+
+      let successCount = 0;
+      let failCount = 0;
+      const nomeCliente = clientData?.nomeCompleto || "";
+
+      for (const file of files) {
+        const result = await uploadArquivoPromarcos(
+          promarcosCodigo,
+          file,
+          file.name,
+          tipo,
+          `${tipo}${nomeCliente ? ` - ${nomeCliente}` : ""}`,
+        );
+        if (result.sucesso) {
+          successCount++;
+        } else {
+          failCount++;
         }
       }
+
+      if (failCount === 0) {
+        toast({ title: "Upload concluído!", description: `${successCount} arquivo(s) de "${tipo}" enviado(s) ao Promarcos com sucesso.` });
+      } else if (successCount > 0) {
+        toast({ title: "Parcialmente concluído", description: `${successCount} enviado(s), ${failCount} falhou.`, variant: "destructive" });
+      } else {
+        toast({ title: "Falha no upload", description: "Não foi possível enviar os arquivos. Tente novamente.", variant: "destructive" });
+      }
     };
+
     input.click();
   };
 

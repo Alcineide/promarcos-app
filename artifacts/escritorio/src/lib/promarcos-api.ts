@@ -372,14 +372,39 @@ export async function gerarFolhaRosto(pessoaId: number): Promise<{ sucesso: bool
   }
 }
 
-export async function uploadArquivoPromarcos(pessoaCodigo: number, blob: Blob, fileName: string): Promise<{ sucesso: boolean; mensagem?: string }> {
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(",")[1]);
+    };
+    reader.onerror = reject;
+  });
+}
+
+export async function uploadArquivoPromarcos(
+  pessoaCodigo: number,
+  blob: Blob,
+  fileName: string,
+  tipo?: string,
+  nome?: string,
+): Promise<{ sucesso: boolean; mensagem?: string }> {
   try {
-    const arrayBuffer = await blob.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const base64 = await blobToBase64(blob);
+    const mimeType = blob.type || (fileName.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
     const res = await fetch(`${PROXY_BASE}/arquivo`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pessoaCodigo, fileName, fileBase64: base64, tipo: "Folha de Rosto", nome: "Folha de Rosto" }),
+      body: JSON.stringify({
+        pessoaCodigo,
+        fileName,
+        fileBase64: base64,
+        mimeType,
+        tipo: tipo || "Documento",
+        nome: nome || fileName,
+      }),
     });
     if (!res.ok) {
       const text = await res.text();
