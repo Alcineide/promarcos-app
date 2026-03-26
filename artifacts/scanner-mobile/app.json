@@ -19,7 +19,9 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Usado para escanear documentos dos clientes com detecção automática de bordas",
         "NSPhotoLibraryUsageDescription": "Salvar documentos escaneados na galeria",
-        "NSPhotoLibraryAddUsageDescription": "Salvar documentos escaneados na galeria"
+        "NSPhotoLibraryAddUsageDescription": "Salvar documentos escaneados na galeria",
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
       }
     },
     "android": {
@@ -32,7 +34,10 @@
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES"
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_AUDIO",
+        "MANAGE_DOCUMENTS"
       ]
     },
     "web": {

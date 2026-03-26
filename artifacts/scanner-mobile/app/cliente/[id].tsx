@@ -73,37 +73,40 @@ async function buildPdfForDoc(doc: QueuedDoc): Promise<{ uri: string; fileName: 
 
 async function saveToDevice(pdfUri: string, pdfFileName: string, clienteNome: string): Promise<void> {
   if (Platform.OS === "web") return;
+
+  const safeName = (clienteNome || "Mendes Advocacia")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, "")
+    .trim()
+    .substring(0, 60);
+
+  // 1. Always save to private app storage (accessible via Galeria screen)
+  const internalFolder = `${documentDirectory}MendesAdvocacia/${safeName}/`;
   try {
-    const safeName = clienteNome
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^\w\s]/g, "")
-      .trim()
-      .substring(0, 60);
-    const folder = `${documentDirectory}MendesAdvocacia/${safeName}/`;
-    await makeDirectoryAsync(folder, { intermediates: true });
-    const dest = folder + pdfFileName;
+    await makeDirectoryAsync(internalFolder, { intermediates: true });
+    const dest = internalFolder + pdfFileName;
     const info = await getInfoAsync(dest);
     if (!info.exists) await copyAsync({ from: pdfUri, to: dest });
-    if (Platform.OS === "android") {
+  } catch { /* non-critical */ }
+
+  // 2. Android: try to copy directly to the Downloads/MendesAdvocacia folder
+  if (Platform.OS === "android") {
+    try {
+      const downloadsFolder = `/storage/emulated/0/Download/MendesAdvocacia/${safeName}/`;
+      await makeDirectoryAsync(downloadsFolder, { intermediates: true });
+      const dest = downloadsFolder + pdfFileName;
+      const info = await getInfoAsync(dest);
+      if (!info.exists) await copyAsync({ from: pdfUri, to: dest });
+    } catch {
+      // Fallback: try via MediaLibrary (works on older Android versions)
       try {
         const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status === "granted") {
-          const asset = await MediaLibrary.createAssetAsync(dest);
-          const albumName = `Mendes Advocacia - ${safeName}`;
-          const existing = await MediaLibrary.getAlbumAsync(albumName);
-          if (existing) {
-            await MediaLibrary.addAssetsToAlbumAsync([asset], existing, false);
-          } else {
-            await MediaLibrary.createAlbumAsync(albumName, asset, false);
-          }
+          await MediaLibrary.createAssetAsync(internalFolder + pdfFileName);
         }
-      } catch {
-        // Ignore silently
-      }
+      } catch { /* ignore */ }
     }
-  } catch {
-    // Non-critical
   }
 }
 
@@ -176,12 +179,13 @@ export default function ClienteScreen() {
 
         const pdfBase64 = await readAsStringAsync(pdfUri, { encoding: EncodingType.Base64 });
 
+        const nomeCliente = (doc.clienteNome ?? "").trim() || "Cliente";
         await apiPost("/promarcos/arquivo", {
           pessoaCodigo: parseInt(doc.clienteId, 10),
           fileName: pdfFileName,
           fileBase64: pdfBase64,
           tipo: doc.categoriaNome,
-          nome: `${doc.categoriaNome} - ${doc.clienteNome}`,
+          nome: `${doc.categoriaNome} - ${nomeCliente}`,
           mimeType: "application/pdf",
         });
 
