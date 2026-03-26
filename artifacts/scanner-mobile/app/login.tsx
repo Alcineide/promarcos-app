@@ -107,6 +107,7 @@ export default function LoginScreen() {
 
             {/* Title */}
             <Text style={styles.title}>PROMARCOS</Text>
+            <Text style={styles.titleSub}>CLIENTES</Text>
             <Text style={styles.subtitle}>Sistema de Gestão Jurídica</Text>
 
             {/* Email */}
@@ -210,19 +211,28 @@ const styles = StyleSheet.create({
 
   logoRow: {
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   logoImg: {
-    width: 120,
-    height: 56,
+    width: 140,
+    height: 140,
+    borderRadius: 28,
   },
 
   title: {
-    fontSize: 22,
+    fontSize: 26,
     fontFamily: "Inter_700Bold",
     color: "#1e3a8a",
     textAlign: "center",
-    letterSpacing: 2,
+    letterSpacing: 4,
+    marginBottom: 2,
+  },
+  titleSub: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: "#3b82f6",
+    textAlign: "center",
+    letterSpacing: 8,
     marginBottom: 4,
   },
   subtitle: {
@@ -230,7 +240,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: "#6b7280",
     textAlign: "center",
-    marginBottom: 28,
+    marginBottom: 24,
   },
 
   fieldGroup: { marginBottom: 16 },
