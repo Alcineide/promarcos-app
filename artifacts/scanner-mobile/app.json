@@ -43,29 +43,6 @@
     "web": {
       "favicon": "./assets/images/icon.png"
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "plugins": [
-      "expo-font",
-      "expo-web-browser",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Acesso às fotos para selecionar documentos",
-          "cameraPermission": "Acesso à câmera para escanear documentos"
-        }
-      ],
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "Salvar documentos escaneados na galeria",
-          "savePhotosPermission": "Salvar documentos escaneados na galeria",
-          "isAccessMediaLocationEnabled": true
-        }
-      ],
-      "react-native-document-scanner-plugin"
-    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
