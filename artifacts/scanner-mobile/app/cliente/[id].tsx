@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { File, documentDirectory, makeDirectoryAsync, copyAsync, getInfoAsync } from "expo-file-system";
+import { readAsStringAsync, EncodingType, documentDirectory, makeDirectoryAsync, copyAsync, getInfoAsync } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as MediaLibrary from "expo-media-library";
 import * as Print from "expo-print";
@@ -48,8 +48,7 @@ function initials(name: string) {
 async function buildPdfForDoc(doc: QueuedDoc): Promise<{ uri: string; fileName: string }> {
   const base64Images = await Promise.all(
     doc.pages.map(async (page) => {
-      const file = new File(page.uri);
-      const b64 = await file.base64();
+      const b64 = await readAsStringAsync(page.uri, { encoding: EncodingType.Base64 });
       const ext = page.uri.split(".").pop()?.toLowerCase() ?? "jpg";
       const mime = ext === "png" ? "image/png" : "image/jpeg";
       return { b64, mime };
@@ -175,8 +174,7 @@ export default function ClienteScreen() {
       try {
         const { uri: pdfUri, fileName: pdfFileName } = await buildPdfForDoc(doc);
 
-        const pdfFile = new File(pdfUri);
-        const pdfBase64 = await pdfFile.base64();
+        const pdfBase64 = await readAsStringAsync(pdfUri, { encoding: EncodingType.Base64 });
 
         await apiPost("/promarcos/arquivo", {
           pessoaCodigo: parseInt(doc.clienteId, 10),
@@ -233,6 +231,13 @@ export default function ClienteScreen() {
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{nome?.split(" ")[0]}</Text>
         <View style={styles.headerRight}>
+          <Pressable
+            onPress={() => router.replace("/home")}
+            style={styles.headerIconBtn}
+            hitSlop={8}
+          >
+            <Feather name="user-plus" size={20} color={Colors.primary} />
+          </Pressable>
           {Platform.OS !== "web" && (
             <Pressable
               onPress={() =>

@@ -29,6 +29,7 @@ type ScanStep = "camera" | "crop" | "review" | "done";
 type AutoCorners = { left: number; top: number; right: number; bottom: number };
 
 function detectDocumentCorners(canvas: HTMLCanvasElement): AutoCorners | null {
+  // Work at reduced resolution for speed
   const MAX = 480;
   const sw = Math.min(canvas.width, MAX);
   const sh = Math.round(canvas.height * (sw / canvas.width));
@@ -39,80 +40,88 @@ function detectDocumentCorners(canvas: HTMLCanvasElement): AutoCorners | null {
   small.getContext("2d")!.drawImage(canvas, 0, 0, sw, sh);
   const { data } = small.getContext("2d")!.getImageData(0, 0, sw, sh);
 
-  // Grayscale
-  const gray = new Uint8Array(sw * sh);
-  for (let i = 0; i < sw * sh; i++) {
+  const N = sw * sh;
+
+  // Convert to grayscale
+  const gray = new Uint8Array(N);
+  for (let i = 0; i < N; i++) {
     gray[i] = (data[i * 4] * 77 + data[i * 4 + 1] * 150 + data[i * 4 + 2] * 29) >> 8;
   }
 
-  // Box blur 5×5
-  const blurred = new Float32Array(sw * sh);
-  const r = 2;
-  for (let y = r; y < sh - r; y++) {
-    for (let x = r; x < sw - r; x++) {
-      let s = 0;
-      for (let dy = -r; dy <= r; dy++)
-        for (let dx = -r; dx <= r; dx++) s += gray[(y + dy) * sw + (x + dx)];
-      blurred[y * sw + x] = s / 25;
-    }
+  // Compute histogram for Otsu thresholding
+  const hist = new Int32Array(256);
+  for (let i = 0; i < N; i++) hist[gray[i]]++;
+
+  // Otsu's method: find threshold that maximises between-class variance
+  let sum = 0;
+  for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sumB = 0, wB = 0, otsuThresh = 128, maxBetween = 0;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (!wB) continue;
+    const wF = N - wB;
+    if (!wF) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > maxBetween) { maxBetween = between; otsuThresh = t; }
   }
 
-  // Sobel edge magnitude
-  const mags = new Float32Array(sw * sh);
-  let maxMag = 0;
-  for (let y = 1; y < sh - 1; y++) {
-    for (let x = 1; x < sw - 1; x++) {
-      const gx =
-        -blurred[(y - 1) * sw + x - 1] - 2 * blurred[y * sw + x - 1] - blurred[(y + 1) * sw + x - 1] +
-         blurred[(y - 1) * sw + x + 1] + 2 * blurred[y * sw + x + 1] + blurred[(y + 1) * sw + x + 1];
-      const gy =
-        -blurred[(y - 1) * sw + x - 1] - 2 * blurred[(y - 1) * sw + x] - blurred[(y - 1) * sw + x + 1] +
-         blurred[(y + 1) * sw + x - 1] + 2 * blurred[(y + 1) * sw + x] + blurred[(y + 1) * sw + x + 1];
-      const mag = Math.sqrt(gx * gx + gy * gy);
-      mags[y * sw + x] = mag;
-      if (mag > maxMag) maxMag = mag;
-    }
+  // Classify: bright pixels (above threshold) = document (white paper)
+  // Also try dark-on-light in case the document is dark
+  const brightCount = new Int32Array(1);
+  const darkCount = new Int32Array(1);
+  for (let i = 0; i < N; i++) {
+    if (gray[i] > otsuThresh) brightCount[0]++;
+    else darkCount[0]++;
   }
+  // Document is the minority class only if it covers 15-85% of image
+  const brightRatio = brightCount[0] / N;
+  if (brightRatio < 0.10 || brightRatio > 0.95) return null;
 
-  if (maxMag < 10) return null;
-
-  // Projection onto rows and columns
-  const threshold = maxMag * 0.15;
-  const colSum = new Float32Array(sw);
-  const rowSum = new Float32Array(sh);
-  let totalEdge = 0;
-
+  // Project bright pixels onto rows and columns
+  const colSum = new Int32Array(sw);
+  const rowSum = new Int32Array(sh);
+  let totalBright = 0;
   for (let y = 0; y < sh; y++) {
     for (let x = 0; x < sw; x++) {
-      const m = mags[y * sw + x];
-      if (m > threshold) { colSum[x] += m; rowSum[y] += m; totalEdge++; }
+      if (gray[y * sw + x] > otsuThresh) {
+        colSum[x]++;
+        rowSum[y]++;
+        totalBright++;
+      }
     }
   }
 
-  if (totalEdge < 80) return null;
+  if (totalBright < N * 0.10) return null;
 
-  const maxCol = Math.max(...colSum);
-  const maxRow = Math.max(...rowSum);
-  const colThresh = maxCol * 0.06;
-  const rowThresh = maxRow * 0.06;
+  // Find document boundaries: find where density drops to < 30% of its peak
+  let maxCol = 0, maxRow = 0;
+  for (let x = 0; x < sw; x++) if (colSum[x] > maxCol) maxCol = colSum[x];
+  for (let y = 0; y < sh; y++) if (rowSum[y] > maxRow) maxRow = rowSum[y];
+
+  const colThresh = maxCol * 0.30;
+  const rowThresh = maxRow * 0.30;
 
   let left = 0, right = sw - 1, top = 0, bottom = sh - 1;
-  for (let x = 0; x < sw; x++)       if (colSum[x] > colThresh) { left = x; break; }
-  for (let x = sw - 1; x >= 0; x--)  if (colSum[x] > colThresh) { right = x; break; }
-  for (let y = 0; y < sh; y++)        if (rowSum[y] > rowThresh) { top = y; break; }
-  for (let y = sh - 1; y >= 0; y--)   if (rowSum[y] > rowThresh) { bottom = y; break; }
+  for (let x = 0; x < sw; x++)      if (colSum[x] >= colThresh) { left = x; break; }
+  for (let x = sw - 1; x >= 0; x--) if (colSum[x] >= colThresh) { right = x; break; }
+  for (let y = 0; y < sh; y++)      if (rowSum[y] >= rowThresh) { top = y; break; }
+  for (let y = sh - 1; y >= 0; y--) if (rowSum[y] >= rowThresh) { bottom = y; break; }
 
-  // Must cover at least 25% of image
-  if ((right - left) < sw * 0.25 || (bottom - top) < sh * 0.25) return null;
+  // Document must cover at least 20% of image dimensions
+  if ((right - left) < sw * 0.20 || (bottom - top) < sh * 0.20) return null;
 
-  // Small inward padding so corners land inside, not on, the edge
-  const px = sw * 0.01, py = sh * 0.01;
+  // Slight inward padding (1%) so handles sit just inside the document edge
+  const px = sw * 0.015;
+  const py = sh * 0.015;
 
   return {
-    left: Math.max(0, left - px) / sw,
-    top: Math.max(0, top - py) / sh,
-    right: Math.min(sw, right + px) / sw,
-    bottom: Math.min(sh, bottom + py) / sh,
+    left: Math.max(0, (left + px)) / sw,
+    top: Math.max(0, (top + py)) / sh,
+    right: Math.min(sw, (right - px)) / sw,
+    bottom: Math.min(sh, (bottom - py)) / sh,
   };
 }
 

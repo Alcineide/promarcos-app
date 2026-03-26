@@ -66,7 +66,7 @@ export default function GaleriaScreen() {
   const params = useLocalSearchParams<{ dir?: string; titulo?: string }>();
 
   const currentDir = params.dir ?? BASE_DIR;
-  const titulo = params.titulo ?? "Galeria";
+  const titulo = params.titulo ?? "Documentos Escaneados";
   const isRoot = currentDir === BASE_DIR;
 
   const { logout } = useAuth();
@@ -190,6 +190,13 @@ export default function GaleriaScreen() {
           </Text>
         </View>
         <View style={{ flexDirection: "row", gap: 6 }}>
+          <Pressable
+            onPress={() => router.replace("/home")}
+            style={styles.refreshBtn}
+            hitSlop={8}
+          >
+            <Feather name="user-plus" size={20} color={Colors.primary} />
+          </Pressable>
           <Pressable onPress={handleRefresh} style={styles.refreshBtn} hitSlop={8}>
             <Feather name="refresh-cw" size={20} color={Colors.primary} />
           </Pressable>
