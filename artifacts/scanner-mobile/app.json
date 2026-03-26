@@ -44,8 +44,7 @@
       "favicon": "./assets/images/icon.png"
     },
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {}
   }
