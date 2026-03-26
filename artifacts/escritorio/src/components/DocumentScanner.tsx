@@ -1,5 +1,6 @@
-import { Camera, Check, ChevronLeft, FlipHorizontal, Image, RotateCcw, Scan, Trash2, Upload, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, FlipHorizontal, Image, Scan, Upload, X } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { PerspectiveCrop } from "./PerspectiveCrop";
 
 interface CapturedPage {
   id: string;
@@ -19,7 +20,8 @@ function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
 }
 
-type ScanStep = "camera" | "review" | "uploading" | "done";
+// "camera" → user captures → "crop" → user adjusts corners → back to "camera" (page added) or "review"
+type ScanStep = "camera" | "crop" | "review" | "done";
 
 export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }: DocumentScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -28,6 +30,7 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
 
   const [step, setStep] = useState<ScanStep>("camera");
   const [pages, setPages] = useState<CapturedPage[]>([]);
+  const [pendingCapture, setPendingCapture] = useState<string | null>(null); // dataUrl awaiting crop
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
@@ -37,19 +40,11 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
   const startCamera = useCallback(async (mode: "environment" | "user") => {
     setCameraError(null);
     setCameraReady(false);
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: mode },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
+        video: { facingMode: { ideal: mode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       });
       streamRef.current = stream;
@@ -75,20 +70,19 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
   useEffect(() => {
     if (step === "camera") {
       startCamera(facingMode);
+    } else {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     }
     return () => {
       if (step !== "camera") {
-        streamRef.current?.getTracks().forEach(t => t.stop());
+        streamRef.current?.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       }
     };
   }, [step, facingMode, startCamera]);
 
-  useEffect(() => {
-    return () => {
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    };
-  }, []);
+  useEffect(() => () => { streamRef.current?.getTracks().forEach((t) => t.stop()); }, []);
 
   function flipCamera() {
     const next = facingMode === "environment" ? "user" : "environment";
@@ -98,41 +92,36 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
 
   function captureFrame() {
     if (!videoRef.current || !canvasRef.current || !cameraReady) return;
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-
     const ctx = canvas.getContext("2d")!;
-
-    if (facingMode === "user") {
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-    }
-
+    if (facingMode === "user") { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Flash effect
     setFlash(true);
     setTimeout(() => setFlash(false), 150);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    setPendingCapture(dataUrl);
+    setStep("crop");
+  }
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const ts = Date.now();
-        const safeName = clienteNome.replace(/\s+/g, "_").replace(/[^\w_]/g, "").substring(0, 40);
-        const fileName = `${safeName}_${tipoDcumento.replace(/\s+/g, "_")}_${ts}_p${pages.length + 1}.jpg`;
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-        setPages(prev => [...prev, { id: makeId(), dataUrl, blob, fileName }]);
-      },
-      "image/jpeg",
-      0.92
-    );
+  function handleCropConfirm(blob: Blob, dataUrl: string) {
+    const ts = Date.now();
+    const safeName = clienteNome.replace(/\s+/g, "_").replace(/[^\w_]/g, "").substring(0, 40);
+    const fileName = `${safeName}_${tipoDcumento.replace(/\s+/g, "_")}_${ts}_p${pages.length + 1}.jpg`;
+    setPages((prev) => [...prev, { id: makeId(), dataUrl, blob, fileName }]);
+    setPendingCapture(null);
+    setStep("camera");
+  }
+
+  function handleCropRetake() {
+    setPendingCapture(null);
+    setStep("camera");
   }
 
   function removePage(id: string) {
-    setPages(prev => prev.filter(p => p.id !== id));
+    setPages((prev) => prev.filter((p) => p.id !== id));
   }
 
   async function handleSend() {
@@ -142,27 +131,16 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
       await onUpload(pages);
       setStep("done");
     } catch {
-      // error handled by caller
+      // handled by caller
     } finally {
       setUploading(false);
     }
   }
 
-  function goToReview() {
-    if (pages.length === 0) return;
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-    setStep("review");
-  }
-
-  function goBackToCamera() {
-    setStep("camera");
-  }
-
-  // ---- STEP: DONE ----
+  // ---- DONE ----
   if (step === "done") {
     return (
-      <div className="flex flex-col items-center justify-center gap-6 py-10 px-6 text-center">
+      <div className="flex flex-col items-center justify-center gap-6 py-10 px-6 text-center bg-white flex-1">
         <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
           <Check className="w-10 h-10 text-green-600" />
         </div>
@@ -172,29 +150,40 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
             {pages.length} página{pages.length !== 1 ? "s" : ""} de <strong>{tipoDcumento}</strong> salvas no Promarcos
           </p>
         </div>
-        <button
-          onClick={onClose}
-          className="px-8 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors"
-        >
+        <button onClick={onClose} className="px-8 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors">
           Concluir
         </button>
       </div>
     );
   }
 
-  // ---- STEP: REVIEW ----
+  // ---- CROP ----
+  if (step === "crop" && pendingCapture) {
+    return (
+      <PerspectiveCrop
+        imageSrc={pendingCapture}
+        onConfirm={handleCropConfirm}
+        onRetake={handleCropRetake}
+      />
+    );
+  }
+
+  // ---- REVIEW ----
   if (step === "review") {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full bg-white">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-          <button onClick={goBackToCamera} className="p-2 rounded-lg hover:bg-muted transition-colors">
+          <button onClick={() => setStep("camera")} className="p-2 rounded-lg hover:bg-muted transition-colors">
             <ChevronLeft className="w-5 h-5 text-muted-foreground" />
           </button>
           <div className="flex-1">
             <p className="font-semibold text-foreground text-sm">{tipoDcumento}</p>
             <p className="text-xs text-muted-foreground">{pages.length} página{pages.length !== 1 ? "s" : ""} capturada{pages.length !== 1 ? "s" : ""}</p>
           </div>
-          <button onClick={goBackToCamera} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors">
+          <button
+            onClick={() => setStep("camera")}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors"
+          >
             <Camera className="w-3.5 h-3.5" />
             + Adicionar
           </button>
@@ -233,15 +222,9 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
             className="w-full py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
             {uploading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Enviando...
-              </>
+              <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Enviando...</>
             ) : (
-              <>
-                <Upload className="w-5 h-5" />
-                Enviar {pages.length} página{pages.length !== 1 ? "s" : ""} ao Promarcos
-              </>
+              <><Upload className="w-5 h-5" />Enviar {pages.length} página{pages.length !== 1 ? "s" : ""} ao Promarcos</>
             )}
           </button>
         </div>
@@ -249,30 +232,22 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
     );
   }
 
-  // ---- STEP: CAMERA (default) ----
+  // ---- CAMERA (default) ----
   return (
     <div className="flex flex-col h-full bg-black relative overflow-hidden">
-      {/* Flash overlay */}
-      {flash && <div className="absolute inset-0 bg-white z-50 opacity-80 pointer-events-none" />}
-
-      {/* Canvas (hidden, used for capture) */}
+      {flash && <div className="absolute inset-0 bg-white z-50 opacity-90 pointer-events-none" />}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Camera error state */}
       {cameraError ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
           <Camera className="w-16 h-16 text-white/30" />
           <p className="text-white/70 text-sm">{cameraError}</p>
-          <button
-            onClick={() => startCamera(facingMode)}
-            className="px-4 py-2 bg-white/20 text-white rounded-xl text-sm font-semibold hover:bg-white/30 transition-colors"
-          >
+          <button onClick={() => startCamera(facingMode)} className="px-4 py-2 bg-white/20 text-white rounded-xl text-sm font-semibold hover:bg-white/30 transition-colors">
             Tentar novamente
           </button>
         </div>
       ) : (
         <>
-          {/* Live video */}
           <video
             ref={videoRef}
             playsInline
@@ -284,7 +259,6 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
           {/* Document frame guide overlay */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="relative" style={{ width: "75%", aspectRatio: "0.707" }}>
-              {/* Corner marks */}
               {[
                 "top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-lg",
                 "top-0 right-0 border-t-[3px] border-r-[3px] rounded-tr-lg",
@@ -293,7 +267,6 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
               ].map((cls, i) => (
                 <div key={i} className={`absolute w-8 h-8 border-white ${cls}`} />
               ))}
-              {/* Dim overlay outside the frame */}
               <div className="absolute inset-0 rounded-lg ring-[2000px] ring-black/50" />
             </div>
           </div>
@@ -318,17 +291,12 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
               Posicione o documento dentro das marcas e toque em Escanear
             </p>
             <div className="flex items-center justify-between">
-              {/* Thumbnails / gallery link */}
+              {/* Last thumbnail */}
               <div className="w-16 flex items-center justify-center">
                 {pages.length > 0 ? (
-                  <button
-                    onClick={goToReview}
-                    className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-white shadow-lg"
-                  >
+                  <button onClick={() => setStep("review")} className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-white shadow-lg">
                     <img src={pages[pages.length - 1].dataUrl} alt="preview" className="w-full h-full object-cover" />
-                    <div className="absolute bottom-0 right-0 bg-primary text-white text-xs font-bold px-1.5 py-0.5 rounded-tl-md">
-                      {pages.length}
-                    </div>
+                    <div className="absolute bottom-0 right-0 bg-primary text-white text-xs font-bold px-1.5 py-0.5 rounded-tl-md">{pages.length}</div>
                   </button>
                 ) : (
                   <div className="w-14 h-14 rounded-xl border-2 border-white/30 flex items-center justify-center">
@@ -337,7 +305,7 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
                 )}
               </div>
 
-              {/* Shutter button */}
+              {/* Shutter */}
               <button
                 onClick={captureFrame}
                 disabled={!cameraReady}
@@ -348,13 +316,10 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
                 </div>
               </button>
 
-              {/* Review / done */}
+              {/* Review button */}
               <div className="w-16 flex flex-col items-center justify-center">
                 {pages.length > 0 ? (
-                  <button
-                    onClick={goToReview}
-                    className="flex flex-col items-center gap-1 text-white/80 hover:text-white transition-colors"
-                  >
+                  <button onClick={() => setStep("review")} className="flex flex-col items-center gap-1 text-white/80 hover:text-white transition-colors">
                     <Check className="w-6 h-6" />
                     <span className="text-xs font-semibold">Revisar</span>
                   </button>
@@ -365,7 +330,6 @@ export function DocumentScanner({ tipoDcumento, clienteNome, onUpload, onClose }
             </div>
           </div>
 
-          {/* Loading indicator */}
           {!cameraReady && !cameraError && (
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
