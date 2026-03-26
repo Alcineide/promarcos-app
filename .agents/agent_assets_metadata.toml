@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "vJfIKkMoao-RYMhmkHfxS"
+uri = "file://TESTFLIGHT_INSTRUCOES.md"
+type = "text"
+title = "Instruções TestFlight — Promarcos Clientes"
