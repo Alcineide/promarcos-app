@@ -6,7 +6,8 @@ import * as z from "zod";
 import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, editarProcessoPromarcos, gerarFolhaRosto, uploadArquivoPromarcos, buscarSocio, buscarIndicadoresProcesso, adicionarIndicador, removerIndicador, buscarSociosProcesso, adicionarSocio, removerSocio, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo, type ProcessoIndicador, type ProcessoSocioParsed, type BuscarSocioResult } from "@/lib/promarcos-api";
 import { 
   User, Phone, MapPin, FileText, FolderOpen, Save, 
-  ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase, Loader2, RefreshCw, ExternalLink
+  ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase, Loader2, RefreshCw, ExternalLink,
+  Camera, ImageIcon, X, Upload, CheckCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Layout } from "@/components/layout";
@@ -66,6 +67,10 @@ export default function ClientForm() {
 
   const [activeTab, setActiveTab] = useState<"cadastro" | "processos" | "documentos">("cadastro");
   const [scannerModal, setScannerModal] = useState<{ tipo: string; tipoSlug: string } | null>(null);
+  const [capturedFiles, setCapturedFiles] = useState<File[]>([]);
+  const [capturedPreviews, setCapturedPreviews] = useState<string[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [uploadDone, setUploadDone] = useState(false);
   const [promarkosPreloaded, setPromarkosPreloaded] = useState(false);
   const [promarcosCodigo, setPromarcosCodigo] = useState<number | null>(null);
   const [promarkosProcessos, setPromarkosProcessos] = useState<PromarkosProcesso[]>([]);
@@ -164,6 +169,14 @@ export default function ClientForm() {
       setValue("escritorio", clientData.escritorio);
     }
   }, [clientData?.escritorio, empresas, setValue]);
+
+  useEffect(() => {
+    capturedPreviews.forEach(url => URL.revokeObjectURL(url));
+    setCapturedFiles([]);
+    setCapturedPreviews([]);
+    setUploadDone(false);
+    setUploadingFiles(false);
+  }, [scannerModal]);
 
   const fetchPromarkosProcessos = async (codigo: number) => {
     setLoadingPromarkosProcessos(true);
@@ -711,6 +724,54 @@ export default function ClientForm() {
       }
     };
     input.click();
+  };
+
+  const addFilesFromInput = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const newFiles = Array.from(files);
+    const newPreviews = newFiles.map(f => URL.createObjectURL(f));
+    setCapturedFiles(prev => [...prev, ...newFiles]);
+    setCapturedPreviews(prev => [...prev, ...newPreviews]);
+    setUploadDone(false);
+  };
+
+  const openCameraInput = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = (e) => addFilesFromInput((e.target as HTMLInputElement).files);
+    input.click();
+  };
+
+  const openGalleryInput = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,application/pdf';
+    input.multiple = true;
+    input.onchange = (e) => addFilesFromInput((e.target as HTMLInputElement).files);
+    input.click();
+  };
+
+  const handleUploadCaptured = async () => {
+    if (!promarcosCodigo || capturedFiles.length === 0 || !scannerModal) return;
+    setUploadingFiles(true);
+    const nomeCliente = clientData?.nomeCompleto || "";
+    let successCount = 0;
+    let failCount = 0;
+    for (const file of capturedFiles) {
+      const result = await uploadArquivoPromarcos(
+        promarcosCodigo, file, file.name, scannerModal.tipo,
+        `${scannerModal.tipo}${nomeCliente ? ` - ${nomeCliente}` : ""}`,
+      );
+      if (result.sucesso) successCount++; else failCount++;
+    }
+    setUploadingFiles(false);
+    if (failCount === 0) {
+      setUploadDone(true);
+    } else {
+      toast({ title: failCount === capturedFiles.length ? "Falha no envio" : "Parcialmente enviado", description: `${successCount} enviado(s), ${failCount} com falha.`, variant: "destructive" });
+    }
   };
 
   if (isEditing && isLoadingClient) {
@@ -1789,7 +1850,7 @@ export default function ClientForm() {
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
               className="bg-white rounded-2xl w-full max-w-sm md:max-w-md flex flex-col overflow-hidden shadow-2xl"
-              style={{ height: "min(85vh, 700px)" }}
+              style={{ maxHeight: "90vh", minHeight: capturedFiles.length > 0 ? "420px" : "auto" }}
             >
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 flex-shrink-0 bg-gradient-to-r from-primary to-primary/90">
@@ -1807,36 +1868,104 @@ export default function ClientForm() {
                 </button>
               </div>
 
-              {/* Scanner iframe */}
-              <div className="flex-1 relative overflow-hidden">
-                <iframe
-                  src={`${window.location.origin}/scanner-mobile/scanner?clienteId=${promarcosCodigo}&clienteNome=${encodeURIComponent(clientData?.nomeCompleto || "")}&categoria=${scannerModal.tipoSlug}&categoriaNome=${encodeURIComponent(scannerModal.tipo)}`}
-                  className="absolute inset-0 w-full h-full border-0"
-                  title={`Scanner - ${scannerModal.tipo}`}
-                  allow="camera; microphone"
-                />
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-5 py-5">
+                {uploadDone ? (
+                  /* Success state */
+                  <div className="flex flex-col items-center justify-center h-full gap-4 py-8">
+                    <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+                      <CheckCircle className="w-10 h-10 text-green-600" />
+                    </div>
+                    <p className="text-lg font-bold text-green-700 text-center">Enviado com sucesso!</p>
+                    <p className="text-sm text-muted-foreground text-center">
+                      {capturedFiles.length} arquivo(s) salvos na pasta do cliente no Promarcos.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setCapturedFiles([]); setCapturedPreviews([]); setUploadDone(false); }}
+                      className="mt-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors"
+                    >
+                      Anexar mais documentos
+                    </button>
+                  </div>
+                ) : capturedFiles.length === 0 ? (
+                  /* Empty state - choose source */
+                  <div className="flex flex-col items-center justify-center h-full gap-5 py-6">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-100 flex items-center justify-center">
+                      <Camera className="w-8 h-8 text-amber-600" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-foreground mb-1">Adicionar documento</p>
+                      <p className="text-xs text-muted-foreground">Tire uma foto ou selecione da galeria</p>
+                    </div>
+                    <div className="flex flex-col gap-3 w-full max-w-xs">
+                      <button
+                        type="button"
+                        onClick={openCameraInput}
+                        className="flex items-center justify-center gap-3 w-full px-5 py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-base shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all"
+                      >
+                        <Camera className="w-5 h-5" />
+                        Tirar Foto com a Câmera
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openGalleryInput}
+                        className="flex items-center justify-center gap-3 w-full px-5 py-4 rounded-2xl border-2 border-amber-500/40 bg-amber-50 text-amber-800 font-semibold text-base hover:bg-amber-100 active:scale-95 transition-all"
+                      >
+                        <ImageIcon className="w-5 h-5" />
+                        Galeria / Arquivo
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Preview state */
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-sm">{capturedFiles.length} foto(s) selecionada(s)</p>
+                      <button type="button" onClick={openCameraInput} className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
+                        <Camera className="w-3.5 h-3.5" /> Adicionar
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {capturedPreviews.map((url, i) => (
+                        <div key={i} className="relative aspect-[3/4] rounded-lg overflow-hidden bg-muted border border-border">
+                          <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              URL.revokeObjectURL(url);
+                              setCapturedFiles(prev => prev.filter((_, j) => j !== i));
+                              setCapturedPreviews(prev => prev.filter((_, j) => j !== i));
+                            }}
+                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                          <span className="absolute bottom-1 left-1 text-xs font-bold bg-black/50 text-white rounded px-1">{i + 1}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Footer - fallback */}
-              <div className="flex items-center gap-3 px-5 py-3 border-t border-border/40 bg-muted/30 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleUploadArquivoManual(scannerModal.tipo)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-amber-500/40 bg-amber-50 text-amber-700 font-semibold text-sm hover:bg-amber-100 transition-colors"
-                >
-                  <DownloadCloud className="w-4 h-4" />
-                  Selecionar Arquivo
-                </button>
-                <a
-                  href={`${window.location.origin}/scanner-mobile/scanner?clienteId=${promarcosCodigo}&clienteNome=${encodeURIComponent(clientData?.nomeCompleto || "")}&categoria=${scannerModal.tipoSlug}&categoriaNome=${encodeURIComponent(scannerModal.tipo)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 text-primary font-semibold text-sm hover:bg-primary/10 transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Abrir
-                </a>
-              </div>
+              {/* Footer */}
+              {!uploadDone && capturedFiles.length > 0 && (
+                <div className="px-5 py-4 border-t border-border/40 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleUploadCaptured}
+                    disabled={uploadingFiles}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-green-600 text-white font-bold text-base shadow-lg hover:bg-green-700 active:scale-95 transition-all disabled:opacity-60"
+                  >
+                    {uploadingFiles ? (
+                      <><Loader2 className="w-5 h-5 animate-spin" /> Enviando para o Promarcos...</>
+                    ) : (
+                      <><Upload className="w-5 h-5" /> Enviar {capturedFiles.length} arquivo(s) ao Promarcos</>
+                    )}
+                  </button>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
