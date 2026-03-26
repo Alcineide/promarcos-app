@@ -104,11 +104,20 @@ export default function HomeScreen() {
           <Text style={styles.greeting}>Olá, {user?.nome?.split(" ")[0] ?? "Colaborador"}</Text>
           <Text style={styles.headerSub}>Busque um cliente para escanear documentos</Text>
         </View>
-        <Pressable onPress={handleLogout} style={styles.avatarBtn} hitSlop={8}>
-          <View style={styles.avatar}>
-            <Feather name="log-out" size={18} color={Colors.primary} />
-          </View>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push("/galeria")}
+            style={[styles.avatar, { marginRight: 8 }]}
+            hitSlop={8}
+          >
+            <Feather name="folder" size={18} color={Colors.primary} />
+          </Pressable>
+          <Pressable onPress={handleLogout} style={styles.avatarBtn} hitSlop={8}>
+            <View style={styles.avatar}>
+              <Feather name="log-out" size={18} color={Colors.primary} />
+            </View>
+          </Pressable>
+        </View>
       </View>
 
       {/* Search bar */}
@@ -220,6 +229,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     maxWidth: 220,
   },
+  headerActions: { flexDirection: "row", alignItems: "center" },
   avatarBtn: {},
   avatar: {
     width: 44,

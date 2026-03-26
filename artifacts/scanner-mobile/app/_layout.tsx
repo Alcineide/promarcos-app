@@ -35,6 +35,10 @@ function RootLayoutNav() {
         name="scanner"
         options={{ headerShown: false, presentation: "modal" }}
       />
+      <Stack.Screen
+        name="galeria"
+        options={{ headerShown: false }}
+      />
     </Stack>
   );
 }

@@ -122,6 +122,14 @@ export default function ClienteScreen() {
   const [showSuccess, setShowSuccess] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const clienteSafeName = (nome ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, "")
+    .trim()
+    .substring(0, 60);
+  const clienteDir = `${documentDirectory}MendesAdvocacia/${clienteSafeName}/`;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   function handleCategoria(catId: string) {
@@ -207,7 +215,22 @@ export default function ClienteScreen() {
           <Feather name="arrow-left" size={22} color={Colors.text} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>Documentos</Text>
-        <View style={{ width: 40 }} />
+        {Platform.OS !== "web" ? (
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/galeria",
+                params: { dir: clienteDir, titulo: clienteSafeName || nome },
+              })
+            }
+            style={styles.galeriaBtn}
+            hitSlop={10}
+          >
+            <Feather name="folder" size={20} color={Colors.primary} />
+          </Pressable>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
       </View>
 
       <ScrollView
@@ -354,6 +377,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 4,
     elevation: 1,
+  },
+  galeriaBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.accentLight,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   headerTitle: {
     fontSize: 18,
