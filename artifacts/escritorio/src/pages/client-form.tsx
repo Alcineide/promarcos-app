@@ -65,6 +65,7 @@ export default function ClientForm() {
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<"cadastro" | "processos" | "documentos">("cadastro");
+  const [scannerModal, setScannerModal] = useState<{ tipo: string; tipoSlug: string } | null>(null);
   const [promarkosPreloaded, setPromarkosPreloaded] = useState(false);
   const [promarcosCodigo, setPromarcosCodigo] = useState<number | null>(null);
   const [promarkosProcessos, setPromarkosProcessos] = useState<PromarkosProcesso[]>([]);
@@ -658,42 +659,49 @@ export default function ClientForm() {
     }
   };
 
-  const handleFileUpload = async (tipo: string) => {
+  const TIPO_TO_SLUG: Record<string, string> = {
+    "Folha de rosto": "folha-rosto",
+    "Procuração": "procuracao",
+    "Docs Pessoais": "docs-pessoais",
+    "Residência": "residencia",
+    "Fato gerador": "fato-gerador",
+    "Cert. Casamento": "cert-casamento",
+    "Cert. Óbito": "cert-obito",
+    "Provas rurais": "provas-rurais",
+    "Laudo médico": "laudo-medico",
+    "Outros": "outros",
+  };
+
+  const handleFileUpload = (tipo: string) => {
     if (!promarcosCodigo) {
       toast({ title: "Cliente não vinculado", description: "Este cliente não possui vínculo com o Promarcos. Salve o cliente primeiro.", variant: "destructive" });
       return;
     }
+    const tipoSlug = TIPO_TO_SLUG[tipo] || "outros";
+    setScannerModal({ tipo, tipoSlug });
+  };
 
+  const handleUploadArquivoManual = async (tipo: string) => {
+    if (!promarcosCodigo) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*,application/pdf';
     input.multiple = true;
-
     input.onchange = async (e) => {
       const files = Array.from((e.target as HTMLInputElement).files || []);
       if (files.length === 0) return;
-
       toast({ title: "Enviando...", description: `Enviando ${files.length} arquivo(s) para o Promarcos...` });
-
       let successCount = 0;
       let failCount = 0;
       const nomeCliente = clientData?.nomeCompleto || "";
-
       for (const file of files) {
         const result = await uploadArquivoPromarcos(
-          promarcosCodigo,
-          file,
-          file.name,
-          tipo,
+          promarcosCodigo, file, file.name, tipo,
           `${tipo}${nomeCliente ? ` - ${nomeCliente}` : ""}`,
         );
-        if (result.sucesso) {
-          successCount++;
-        } else {
-          failCount++;
-        }
+        if (result.sucesso) successCount++; else failCount++;
       }
-
+      setScannerModal(null);
       if (failCount === 0) {
         toast({ title: "Upload concluído!", description: `${successCount} arquivo(s) de "${tipo}" enviado(s) ao Promarcos com sucesso.` });
       } else if (successCount > 0) {
@@ -702,7 +710,6 @@ export default function ClientForm() {
         toast({ title: "Falha no upload", description: "Não foi possível enviar os arquivos. Tente novamente.", variant: "destructive" });
       }
     };
-
     input.click();
   };
 
@@ -1765,6 +1772,73 @@ export default function ClientForm() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Scanner Modal */}
+      <AnimatePresence>
+        {scannerModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-2xl w-full max-w-sm md:max-w-md flex flex-col overflow-hidden shadow-2xl"
+              style={{ height: "min(85vh, 700px)" }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 flex-shrink-0 bg-gradient-to-r from-primary to-primary/90">
+                <div>
+                  <p className="text-xs text-primary-foreground/70 font-medium uppercase tracking-wide">Anexar Documento</p>
+                  <h3 className="text-lg font-bold text-primary-foreground">{scannerModal.tipo}</h3>
+                </div>
+                <button
+                  onClick={() => setScannerModal(null)}
+                  className="p-2 rounded-full text-primary-foreground/80 hover:bg-white/20 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Scanner iframe */}
+              <div className="flex-1 relative overflow-hidden">
+                <iframe
+                  src={`${window.location.origin}/scanner-mobile/scanner?clienteId=${promarcosCodigo}&clienteNome=${encodeURIComponent(clientData?.nomeCompleto || "")}&categoria=${scannerModal.tipoSlug}&categoriaNome=${encodeURIComponent(scannerModal.tipo)}`}
+                  className="absolute inset-0 w-full h-full border-0"
+                  title={`Scanner - ${scannerModal.tipo}`}
+                  allow="camera; microphone"
+                />
+              </div>
+
+              {/* Footer - fallback */}
+              <div className="flex items-center gap-3 px-5 py-3 border-t border-border/40 bg-muted/30 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleUploadArquivoManual(scannerModal.tipo)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-amber-500/40 bg-amber-50 text-amber-700 font-semibold text-sm hover:bg-amber-100 transition-colors"
+                >
+                  <DownloadCloud className="w-4 h-4" />
+                  Selecionar Arquivo
+                </button>
+                <a
+                  href={`${window.location.origin}/scanner-mobile/scanner?clienteId=${promarcosCodigo}&clienteNome=${encodeURIComponent(clientData?.nomeCompleto || "")}&categoria=${scannerModal.tipoSlug}&categoriaNome=${encodeURIComponent(scannerModal.tipo)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border-2 border-primary/30 bg-primary/5 text-primary font-semibold text-sm hover:bg-primary/10 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Abrir
+                </a>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
