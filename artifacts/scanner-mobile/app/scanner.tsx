@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
-import { File } from "expo-file-system";
+import { File, documentDirectory, makeDirectoryAsync, copyAsync, getInfoAsync } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
 import * as Print from "expo-print";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
@@ -62,6 +63,7 @@ export default function ScannerScreen() {
   const [pdfUri, setPdfUri] = useState<string | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string>("");
   const [uploading, setUploading] = useState(false);
+  const [localSaved, setLocalSaved] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -181,6 +183,45 @@ export default function ScannerScreen() {
     }
   }
 
+  async function saveToDeviceStorage(): Promise<boolean> {
+    if (!pdfUri || Platform.OS === "web") return false;
+    try {
+      const safeName = clienteNome
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\w\s]/g, "")
+        .trim()
+        .substring(0, 60);
+      const folder = `${documentDirectory}MendesAdvocacia/${safeName}/`;
+      await makeDirectoryAsync(folder, { intermediates: true });
+      const dest = folder + pdfFileName;
+      const info = await getInfoAsync(dest);
+      if (!info.exists) {
+        await copyAsync({ from: pdfUri, to: dest });
+      }
+      if (Platform.OS === "android") {
+        try {
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status === "granted") {
+            const asset = await MediaLibrary.createAssetAsync(dest);
+            const albumName = `Mendes Advocacia - ${safeName}`;
+            const existing = await MediaLibrary.getAlbumAsync(albumName);
+            if (existing) {
+              await MediaLibrary.addAssetsToAlbumAsync([asset], existing, false);
+            } else {
+              await MediaLibrary.createAlbumAsync(albumName, asset, false);
+            }
+          }
+        } catch {
+          // MediaLibrary may not support PDFs on all Android versions — ignore silently
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function handleSendPdf() {
     if (!pdfUri) return;
 
@@ -199,6 +240,9 @@ export default function ScannerScreen() {
         nome: `${tipoPromarcos} - ${clienteNome}`,
         mimeType: "application/pdf",
       });
+
+      const saved = await saveToDeviceStorage();
+      setLocalSaved(saved);
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setStep("done");
@@ -225,11 +269,22 @@ export default function ScannerScreen() {
           <View style={styles.successIconBox}>
             <Feather name="check-circle" size={72} color={Colors.success} />
           </View>
-          <Text style={styles.doneTitle}>PDF enviado com sucesso!</Text>
+          <Text style={styles.doneTitle}>Enviado com sucesso!</Text>
           <Text style={styles.doneSub}>
-            O arquivo <Text style={styles.doneFileName}>"{pdfFileName}"</Text> foi enviado
-            ao Promarcos na categoria "{tipoPromarcos}".
+            O arquivo <Text style={styles.doneFileName}>"{pdfFileName}"</Text> foi salvo:
           </Text>
+          <View style={styles.doneChecklist}>
+            <View style={styles.doneCheckRow}>
+              <Feather name="check-circle" size={18} color={Colors.success} />
+              <Text style={styles.doneCheckText}>Pasta do cliente no Promarcos ({tipoPromarcos})</Text>
+            </View>
+            {localSaved && (
+              <View style={styles.doneCheckRow}>
+                <Feather name="check-circle" size={18} color={Colors.success} />
+                <Text style={styles.doneCheckText}>Memória interna · MendesAdvocacia/{clienteNome.substring(0, 25)}</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.doneClient}>{clienteNome}</Text>
 
           <Pressable
@@ -902,5 +957,26 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: Colors.accent,
     marginTop: 8,
+  },
+  doneChecklist: {
+    alignSelf: "stretch",
+    gap: 10,
+    marginVertical: 12,
+    paddingHorizontal: 8,
+  },
+  doneCheckRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: "#ECFDF5",
+    borderRadius: 10,
+    padding: 10,
+  },
+  doneCheckText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.text,
+    lineHeight: 18,
   },
 });
