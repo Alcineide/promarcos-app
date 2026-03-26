@@ -6,6 +6,7 @@ import NotFound from "@/pages/not-found";
 
 import Home from "./pages/home";
 import ClientForm from "./pages/client-form";
+import Veiculos from "./pages/veiculos";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/novo" component={ClientForm} />
       <Route path="/cliente/:id" component={ClientForm} />
+      <Route path="/veiculos" component={Veiculos} />
       <Route component={NotFound} />
     </Switch>
   );

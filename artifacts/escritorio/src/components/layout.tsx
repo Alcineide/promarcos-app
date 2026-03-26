@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Users, Search, Menu, X } from "lucide-react";
+import { Users, Search, Menu, X, Car } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/", label: "Busca de Clientes", icon: Search },
     { href: "/novo", label: "Novo Cliente", icon: Users },
+    { href: "/veiculos", label: "Gestão de Veículos", icon: Car },
   ];
 
   return (
