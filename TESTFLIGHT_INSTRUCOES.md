@@ -13,7 +13,27 @@
 | Conta Apple Developer (paga, $99/ano) | developer.apple.com — já tem |
 | Conta no Expo (gratuita) | expo.dev — já tem |
 | Node.js instalado no computador | nodejs.org (versão 18 ou superior) |
+| Git for Windows (se usar Windows) | git-scm.com/download/win |
 | Acesso ao código-fonte do projeto | Replit — marcosaurelionu |
+
+### ⚠️ Usuários Windows — Leia antes de começar
+
+O projeto usa scripts Unix (`sh`) que **não funcionam no CMD ou PowerShell do Windows**. Use uma destas opções:
+
+**Opção A — Git Bash (recomendado):**
+1. Instale o **Git for Windows**: [git-scm.com/download/win](https://git-scm.com/download/win)
+2. Durante a instalação, deixe marcado "Git Bash Here"
+3. Abra a pasta do projeto → clique direito → **"Git Bash Here"**
+4. Use o Git Bash para todos os comandos abaixo
+
+**Opção B — Ignorar os scripts (solução rápida):**
+Substitua `pnpm install` por:
+```bash
+pnpm install --ignore-scripts
+```
+
+**Opção C — WSL (Windows Subsystem for Linux):**
+Ative o WSL no Windows e use o terminal Ubuntu integrado.
 
 ---
 
