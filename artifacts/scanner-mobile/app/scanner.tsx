@@ -69,13 +69,34 @@ export default function ScannerScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   async function handleScanDocument() {
-    if (Platform.OS === "web") {
+    const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    if (camStatus !== "granted") {
       Alert.alert(
-        "Não disponível na web",
-        "O scanner de documentos só funciona no dispositivo móvel. Use a opção de galeria."
+        "Permissão de câmera necessária",
+        "Permita o acesso à câmera para escanear documentos. Vá em Configurações > Câmera e ative o acesso."
       );
       return;
     }
+
+    if (Platform.OS === "web") {
+      // On web: use browser camera directly
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.9,
+        allowsEditing: false,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        const newPages: ScannedPage[] = result.assets.map((a) => ({
+          id: makeId(),
+          uri: a.uri,
+        }));
+        setPages((prev) => [...prev, ...newPages]);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      return;
+    }
+
+    // On native: use document scanner with edge detection
     try {
       const DocumentScanner = (await import("react-native-document-scanner-plugin")).default;
       const { scannedImages } = await DocumentScanner.scanDocument({
