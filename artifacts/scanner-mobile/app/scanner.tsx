@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system";
+import { File } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import * as MediaLibrary from "expo-media-library";
+import * as Print from "expo-print";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -21,11 +21,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiPost } from "@/config/api";
 import Colors from "@/constants/colors";
 
-interface ScannedPhoto {
+type Step = "capture" | "review" | "sending" | "done";
+
+interface ScannedPage {
   id: string;
   uri: string;
-  uploaded: boolean;
-  error?: string;
 }
 
 const TIPO_MAP: Record<string, string> = {
@@ -41,6 +41,10 @@ const TIPO_MAP: Record<string, string> = {
   outros: "Outros",
 };
 
+function makeId() {
+  return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+}
+
 export default function ScannerScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
@@ -53,39 +57,44 @@ export default function ScannerScreen() {
   const { clienteId, clienteNome, categoria, categoriaNome } = params;
   const tipoPromarcos = TIPO_MAP[categoria] ?? categoriaNome ?? "Documento";
 
-  const [photos, setPhotos] = useState<ScannedPhoto[]>([]);
+  const [step, setStep] = useState<Step>("capture");
+  const [pages, setPages] = useState<ScannedPage[]>([]);
+  const [pdfUri, setPdfUri] = useState<string | null>(null);
+  const [pdfFileName, setPdfFileName] = useState<string>("");
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [done, setDone] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  async function handleTakePhoto() {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
+  async function handleScanDocument() {
+    if (Platform.OS === "web") {
       Alert.alert(
-        "Permissão necessária",
-        "Permita o acesso à câmera nas configurações do dispositivo."
+        "Não disponível na web",
+        "O scanner de documentos só funciona no dispositivo móvel. Use a opção de galeria."
       );
       return;
     }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["images"],
-      quality: 0.85,
-      allowsEditing: false,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      const asset = result.assets[0];
-      const newPhoto: ScannedPhoto = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        uri: asset.uri,
-        uploaded: false,
-      };
-      setPhotos((prev) => [...prev, newPhoto]);
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const DocumentScanner = (await import("react-native-document-scanner-plugin")).default;
+      const { scannedImages } = await DocumentScanner.scanDocument({
+        croppedImageQuality: 85,
+      });
+      if (scannedImages && scannedImages.length > 0) {
+        const newPages: ScannedPage[] = scannedImages.map((uri) => ({
+          id: makeId(),
+          uri,
+        }));
+        setPages((prev) => [...prev, ...newPages]);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        !msg.toLowerCase().includes("cancel") &&
+        !msg.toLowerCase().includes("user cancel")
+      ) {
+        Alert.alert("Erro no scanner", msg);
+      }
     }
   }
 
@@ -103,131 +112,132 @@ export default function ScannerScreen() {
       mediaTypes: ["images"],
       quality: 0.85,
       allowsMultipleSelection: true,
-      selectionLimit: 10,
+      selectionLimit: 20,
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const newPhotos: ScannedPhoto[] = result.assets.map((a) => ({
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      const newPages: ScannedPage[] = result.assets.map((a) => ({
+        id: makeId(),
         uri: a.uri,
-        uploaded: false,
       }));
-      setPhotos((prev) => [...prev, ...newPhotos]);
+      setPages((prev) => [...prev, ...newPages]);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }
 
-  function handleRemovePhoto(id: string) {
+  function handleRemovePage(id: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
+    setPages((prev) => prev.filter((p) => p.id !== id));
   }
 
-  async function handleUpload() {
-    if (photos.length === 0) {
-      Alert.alert("Sem fotos", "Tire pelo menos uma foto para enviar.");
-      return;
-    }
+  async function handleGeneratePdf() {
+    if (pages.length === 0) return;
 
-    setUploading(true);
-    setUploadProgress(0);
-    let successCount = 0;
-    let failCount = 0;
-
-    const pessoaCodigo = parseInt(clienteId, 10);
-    const nomeCliente = (clienteNome ?? "cliente").toUpperCase().replace(/\s+/g, "_");
-
-    for (let i = 0; i < photos.length; i++) {
-      const photo = photos[i];
-      try {
-        const base64 = await FileSystem.readAsStringAsync(photo.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        const ext = photo.uri.split(".").pop() ?? "jpg";
-        const ts = Date.now();
-        const fileName = `${nomeCliente}_${tipoPromarcos.replace(/\s+/g, "_")}_${ts}_${i + 1}.${ext}`;
-        const mimeType = ext.toLowerCase() === "png" ? "image/png" : "image/jpeg";
-
-        await apiPost("/promarcos/arquivo", {
-          pessoaCodigo,
-          fileName,
-          fileBase64: base64,
-          tipo: tipoPromarcos,
-          nome: `${tipoPromarcos} - ${clienteNome}`,
-          mimeType,
-        });
-
-        if (Platform.OS !== "web") {
-          try {
-            const { status } = await MediaLibrary.requestPermissionsAsync();
-            if (status === "granted") {
-              const asset = await MediaLibrary.createAssetAsync(photo.uri);
-              const albumName = `Mendes - ${clienteNome}`;
-              let album = await MediaLibrary.getAlbumAsync(albumName);
-              if (!album) {
-                album = await MediaLibrary.createAlbumAsync(albumName, asset, false);
-              } else {
-                await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-              }
-            }
-          } catch {
-          }
-        }
-
-        setPhotos((prev) =>
-          prev.map((p) => (p.id === photo.id ? { ...p, uploaded: true } : p))
-        );
-        successCount++;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Erro";
-        setPhotos((prev) =>
-          prev.map((p) => (p.id === photo.id ? { ...p, error: msg } : p))
-        );
-        failCount++;
-      }
-
-      setUploadProgress(((i + 1) / photos.length) * 100);
-    }
-
+    setStep("sending");
     setUploading(false);
 
-    if (failCount === 0) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setDone(true);
-    } else {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
-        "Resultado",
-        `${successCount} enviado(s) com sucesso. ${failCount} falhou.`
+    try {
+      const base64Images = await Promise.all(
+        pages.map(async (page) => {
+          const file = new File(page.uri);
+          const b64 = await file.base64();
+          const ext = page.uri.split(".").pop()?.toLowerCase() ?? "jpg";
+          const mime = ext === "png" ? "image/png" : "image/jpeg";
+          return { b64, mime };
+        })
       );
+
+      const pageHtmlItems = base64Images.map(
+        ({ b64, mime }) =>
+          `<div style="page-break-after: always; width:100%; height:100vh; display:flex; align-items:center; justify-content:center; margin:0; padding:0;">
+            <img src="data:${mime};base64,${b64}" style="max-width:100%; max-height:100vh; object-fit:contain;" />
+          </div>`
+      );
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#fff; }
+</style>
+</head>
+<body>${pageHtmlItems.join("\n")}</body>
+</html>`;
+
+      const { uri } = await Print.printToFileAsync({ html });
+
+      const nomeCliente = (clienteNome ?? "cliente").toUpperCase().replace(/\s+/g, "_");
+      const ts = Date.now();
+      const fileName = `${nomeCliente}_${tipoPromarcos.replace(/\s+/g, "_")}_${ts}.pdf`;
+
+      setPdfUri(uri);
+      setPdfFileName(fileName);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao gerar PDF";
+      Alert.alert("Erro", msg);
+      setStep("review");
     }
   }
 
-  const pendingCount = photos.filter((p) => !p.uploaded && !p.error).length;
+  async function handleSendPdf() {
+    if (!pdfUri) return;
 
-  if (done) {
+    setUploading(true);
+    try {
+      const pdfFile = new File(pdfUri);
+      const pdfBase64 = await pdfFile.base64();
+
+      const pessoaCodigo = parseInt(clienteId, 10);
+
+      await apiPost("/promarcos/arquivo", {
+        pessoaCodigo,
+        fileName: pdfFileName,
+        fileBase64: pdfBase64,
+        tipo: tipoPromarcos,
+        nome: `${tipoPromarcos} - ${clienteNome}`,
+        mimeType: "application/pdf",
+      });
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setStep("done");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao enviar";
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Erro ao enviar", msg);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleReset() {
+    setPages([]);
+    setPdfUri(null);
+    setPdfFileName("");
+    setStep("capture");
+  }
+
+  if (step === "done") {
     return (
       <View style={[styles.container, { paddingTop: topPad, paddingBottom: bottomPad }]}>
-        <View style={styles.doneContainer}>
-          <View style={styles.doneIconBox}>
-            <Feather name="check-circle" size={64} color={Colors.success} />
+        <View style={styles.centeredContent}>
+          <View style={styles.successIconBox}>
+            <Feather name="check-circle" size={72} color={Colors.success} />
           </View>
-          <Text style={styles.doneTitle}>Enviado com sucesso!</Text>
+          <Text style={styles.doneTitle}>PDF enviado com sucesso!</Text>
           <Text style={styles.doneSub}>
-            {photos.length} documento(s) de "{tipoPromarcos}" enviados para o Promarcos
-            {Platform.OS !== "web" ? " e salvos na galeria do celular" : ""}
+            O arquivo <Text style={styles.doneFileName}>"{pdfFileName}"</Text> foi enviado
+            ao Promarcos na categoria "{tipoPromarcos}".
           </Text>
           <Text style={styles.doneClient}>{clienteNome}</Text>
 
           <Pressable
             style={[styles.btn, styles.btnPrimary, { marginTop: 32 }]}
-            onPress={() => {
-              setPhotos([]);
-              setDone(false);
-            }}
+            onPress={handleReset}
           >
-            <Feather name="camera" size={18} color="#fff" />
-            <Text style={styles.btnText}>Escanear mais</Text>
+            <Feather name="file-plus" size={18} color="#fff" />
+            <Text style={styles.btnText}>Escanear mais documentos</Text>
           </Pressable>
 
           <Pressable
@@ -241,9 +251,167 @@ export default function ScannerScreen() {
     );
   }
 
+  if (step === "sending") {
+    return (
+      <View style={[styles.container, { paddingTop: topPad }]}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => { if (!uploading) setStep("review"); }}
+            style={styles.backBtn}
+            hitSlop={12}
+            disabled={uploading}
+          >
+            <Feather name="arrow-left" size={22} color={Colors.text} />
+          </Pressable>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerCategory}>{tipoPromarcos}</Text>
+            <Text style={styles.headerClient} numberOfLines={1}>{clienteNome}</Text>
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad + 120 }]}
+        >
+          <View style={styles.sectionHeader}>
+            <Feather name="file-text" size={18} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>PDF Gerado</Text>
+          </View>
+
+          <View style={styles.pdfPreviewCard}>
+            <View style={styles.pdfIconBox}>
+              <Feather name="file-text" size={48} color={Colors.primary} />
+            </View>
+            <Text style={styles.pdfFileName} numberOfLines={2}>{pdfFileName}</Text>
+            <Text style={styles.pdfMeta}>
+              {pages.length} página{pages.length !== 1 ? "s" : ""} · application/pdf
+            </Text>
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <Feather name="image" size={18} color={Colors.textSecondary} />
+            <Text style={[styles.sectionTitle, { color: Colors.textSecondary }]}>
+              Páginas incluídas
+            </Text>
+          </View>
+
+          <View style={styles.thumbRow}>
+            {pages.map((page, idx) => (
+              <View key={page.id} style={styles.thumbItem}>
+                <Image source={{ uri: page.uri }} style={styles.thumbImg} />
+                <Text style={styles.thumbLabel}>{idx + 1}</Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+
+        <View style={[styles.bottomBar, { paddingBottom: bottomPad + 12 }]}>
+          <Pressable
+            style={[styles.btn, styles.btnOutline, { flex: 1 }]}
+            onPress={() => setStep("review")}
+            disabled={uploading}
+          >
+            <Feather name="edit-2" size={18} color={Colors.primary} />
+            <Text style={[styles.btnText, { color: Colors.primary }]}>Revisar</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.btn, styles.btnPrimary, { flex: 2 }]}
+            onPress={handleSendPdf}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Feather name="upload-cloud" size={18} color="#fff" />
+            )}
+            <Text style={styles.btnText}>
+              {uploading ? "Enviando..." : "Enviar para Promarcos"}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  if (step === "review") {
+    return (
+      <View style={[styles.container, { paddingTop: topPad }]}>
+        <View style={styles.header}>
+          <Pressable onPress={() => setStep("capture")} style={styles.backBtn} hitSlop={12}>
+            <Feather name="arrow-left" size={22} color={Colors.text} />
+          </Pressable>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerCategory}>{tipoPromarcos}</Text>
+            <Text style={styles.headerClient} numberOfLines={1}>{clienteNome}</Text>
+          </View>
+          <View style={styles.pageCountBadge}>
+            <Text style={styles.pageCountText}>{pages.length}p</Text>
+          </View>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad + 140 }]}
+        >
+          <Text style={styles.reviewHint}>
+            Revise as páginas abaixo. Toque no X para remover.
+          </Text>
+
+          {pages.map((page, idx) => (
+            <View key={page.id} style={styles.reviewPage}>
+              <View style={styles.reviewPageNum}>
+                <Text style={styles.reviewPageNumText}>{idx + 1}</Text>
+              </View>
+              <Image source={{ uri: page.uri }} style={styles.reviewPageImg} resizeMode="contain" />
+              <Pressable
+                style={styles.reviewRemoveBtn}
+                onPress={() => handleRemovePage(page.id)}
+              >
+                <Feather name="x" size={16} color="#fff" />
+              </Pressable>
+            </View>
+          ))}
+
+          {pages.length === 0 && (
+            <View style={styles.emptyReview}>
+              <Feather name="alert-circle" size={36} color={Colors.textMuted} />
+              <Text style={styles.emptyReviewText}>
+                Nenhuma página. Volte e adicione documentos.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+
+        <View style={[styles.bottomBar, { paddingBottom: bottomPad + 12 }]}>
+          <Pressable
+            style={[styles.btn, styles.btnOutline, { flex: 1 }]}
+            onPress={() => setStep("capture")}
+          >
+            <Feather name="plus" size={18} color={Colors.primary} />
+            <Text style={[styles.btnText, { color: Colors.primary }]}>Adicionar</Text>
+          </Pressable>
+
+          <Pressable
+            style={[
+              styles.btn,
+              pages.length > 0 ? styles.btnPrimary : styles.btnDisabled,
+              { flex: 2 },
+            ]}
+            onPress={handleGeneratePdf}
+            disabled={pages.length === 0}
+          >
+            <Feather name="file-text" size={18} color="#fff" />
+            <Text style={styles.btnText}>Gerar PDF</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
           <Feather name="x" size={22} color={Colors.text} />
@@ -252,127 +420,103 @@ export default function ScannerScreen() {
           <Text style={styles.headerCategory}>{tipoPromarcos}</Text>
           <Text style={styles.headerClient} numberOfLines={1}>{clienteNome}</Text>
         </View>
-        <View style={{ width: 40 }} />
+        {pages.length > 0 ? (
+          <Pressable
+            style={styles.reviewHeaderBtn}
+            onPress={() => setStep("review")}
+          >
+            <Text style={styles.reviewHeaderBtnText}>Revisar ({pages.length})</Text>
+          </Pressable>
+        ) : (
+          <View style={{ width: 60 }} />
+        )}
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad + 100 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad + 130 }]}
       >
-        {photos.length === 0 ? (
+        {pages.length === 0 ? (
           <View style={styles.emptyCamera}>
             <View style={styles.cameraIconBox}>
               <Feather name="camera" size={48} color={Colors.primary} />
             </View>
-            <Text style={styles.emptyTitle}>Nenhuma foto ainda</Text>
+            <Text style={styles.emptyTitle}>Nenhuma página ainda</Text>
             <Text style={styles.emptyText}>
-              Tire fotos dos documentos do cliente. Você pode adicionar quantas fotos quiser.
+              Use o scanner para detectar automaticamente as bordas do documento, ou selecione da galeria.
             </Text>
           </View>
         ) : (
           <>
-            <View style={styles.photosGrid}>
-              {photos.map((photo) => (
-                <View key={photo.id} style={styles.photoItem}>
-                  <Image source={{ uri: photo.uri }} style={styles.photoThumb} />
-                  {photo.uploaded && (
-                    <View style={styles.photoOverlaySuccess}>
-                      <Feather name="check" size={20} color="#fff" />
-                    </View>
-                  )}
-                  {photo.error && (
-                    <View style={styles.photoOverlayError}>
-                      <Feather name="alert-circle" size={20} color="#fff" />
-                    </View>
-                  )}
-                  {!photo.uploaded && !photo.error && !uploading && (
-                    <Pressable
-                      style={styles.removeBtn}
-                      onPress={() => handleRemovePhoto(photo.id)}
-                    >
-                      <Feather name="x" size={14} color="#fff" />
-                    </Pressable>
-                  )}
+            <Text style={styles.captureHint}>
+              Toque em + Scanner para adicionar mais páginas
+            </Text>
+            <View style={styles.thumbGrid}>
+              {pages.map((page, idx) => (
+                <View key={page.id} style={styles.thumbGridItem}>
+                  <Image source={{ uri: page.uri }} style={styles.thumbGridImg} />
+                  <View style={styles.thumbGridBadge}>
+                    <Text style={styles.thumbGridBadgeText}>{idx + 1}</Text>
+                  </View>
+                  <Pressable
+                    style={styles.thumbGridRemove}
+                    onPress={() => handleRemovePage(page.id)}
+                  >
+                    <Feather name="x" size={12} color="#fff" />
+                  </Pressable>
                 </View>
               ))}
             </View>
-
-            {uploading && (
-              <View style={styles.progressBar}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${uploadProgress}%` as any },
-                  ]}
-                />
-              </View>
-            )}
-
-            {uploading && (
-              <Text style={styles.progressText}>
-                Enviando... {Math.round(uploadProgress)}%
-              </Text>
-            )}
           </>
         )}
       </ScrollView>
 
-      {/* Bottom actions */}
-      <View style={[styles.actions, { paddingBottom: bottomPad + 12 }]}>
+      <View style={[styles.bottomBar, { paddingBottom: bottomPad + 12 }]}>
         <Pressable
-          style={[styles.actionBtn, styles.actionBtnOutline]}
+          style={[styles.actionIconBtn]}
           onPress={handlePickFromGallery}
-          disabled={uploading}
+          testID="gallery-btn"
         >
-          <Feather name="image" size={20} color={Colors.primary} />
+          <Feather name="image" size={22} color={Colors.primary} />
+          <Text style={styles.actionIconLabel}>Galeria</Text>
         </Pressable>
 
         <Pressable
-          style={[styles.actionBtn, styles.actionBtnCamera]}
-          onPress={handleTakePhoto}
-          disabled={uploading}
-          testID="camera-btn"
+          style={[styles.scanBtn]}
+          onPress={handleScanDocument}
+          testID="scan-btn"
         >
           <Feather name="camera" size={28} color="#fff" />
+          <Text style={styles.scanBtnLabel}>+ Scanner</Text>
         </Pressable>
 
         <Pressable
           style={[
-            styles.actionBtn,
-            photos.length > 0 && pendingCount > 0 ? styles.actionBtnSend : styles.actionBtnDisabled,
+            styles.actionIconBtn,
+            pages.length === 0 && styles.actionIconBtnDisabled,
           ]}
-          onPress={handleUpload}
-          disabled={uploading || photos.length === 0 || pendingCount === 0}
-          testID="upload-btn"
+          onPress={() => pages.length > 0 && setStep("review")}
+          testID="review-btn"
         >
-          {uploading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Feather name="upload-cloud" size={20} color="#fff" />
-          )}
+          <Feather name="check-square" size={22} color={pages.length > 0 ? Colors.accent : Colors.textMuted} />
+          <Text style={[styles.actionIconLabel, pages.length === 0 && { color: Colors.textMuted }]}>
+            Revisar
+          </Text>
         </Pressable>
       </View>
-
-      {photos.length > 0 && (
-        <View style={[styles.photoCount, { bottom: bottomPad + 88 }]}>
-          <Text style={styles.photoCountText}>
-            {photos.length} foto{photos.length !== 1 ? "s" : ""}
-            {pendingCount > 0 && ` · ${pendingCount} para enviar`}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 14,
     paddingTop: 4,
     backgroundColor: Colors.card,
     borderBottomWidth: 1,
@@ -398,7 +542,33 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     maxWidth: 200,
   },
+  pageCountBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pageCountText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+  },
+  reviewHeaderBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: Colors.accentLight,
+  },
+  reviewHeaderBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.accent,
+  },
+
   scrollContent: { padding: 16, flexGrow: 1 },
+
   emptyCamera: {
     alignItems: "center",
     paddingTop: 60,
@@ -426,66 +596,61 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
   },
-  photosGrid: {
+
+  captureHint: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+
+  thumbGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
   },
-  photoItem: {
-    width: "31%",
-    aspectRatio: 1,
-    borderRadius: 12,
+  thumbGridItem: {
+    width: "30%",
+    aspectRatio: 0.75,
+    borderRadius: 10,
     overflow: "hidden",
     position: "relative",
+    backgroundColor: Colors.border,
   },
-  photoThumb: {
+  thumbGridImg: {
     width: "100%",
     height: "100%",
   },
-  photoOverlaySuccess: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(16, 185, 129, 0.7)",
+  thumbGridBadge: {
+    position: "absolute",
+    bottom: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  photoOverlayError: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(239, 68, 68, 0.7)",
-    alignItems: "center",
-    justifyContent: "center",
+  thumbGridBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
   },
-  removeBtn: {
+  thumbGridRemove: {
     position: "absolute",
     top: 6,
     right: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.55)",
     alignItems: "center",
     justifyContent: "center",
   },
-  progressBar: {
-    height: 6,
-    backgroundColor: Colors.border,
-    borderRadius: 3,
-    overflow: "hidden",
-    marginTop: 20,
-    marginHorizontal: 4,
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: Colors.success,
-    borderRadius: 3,
-  },
-  progressText: {
-    textAlign: "center",
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    color: Colors.textSecondary,
-    marginTop: 8,
-  },
-  actions: {
+
+  bottomBar: {
     position: "absolute",
     bottom: 0,
     left: 0,
@@ -494,61 +659,217 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 16,
-    paddingTop: 12,
-    paddingHorizontal: 32,
+    paddingTop: 14,
+    paddingHorizontal: 24,
     backgroundColor: Colors.card,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
-  actionBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  actionIconBtn: {
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
+    padding: 8,
+    borderRadius: 12,
+    minWidth: 64,
+  },
+  actionIconBtnDisabled: {
+    opacity: 0.4,
+  },
+  actionIconLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.primary,
+  },
+  scanBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+  },
+  scanBtnLabel: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+  },
+
+  btn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 50,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+  },
+  btnPrimary: {
+    backgroundColor: Colors.primary,
+  },
+  btnOutline: {
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    backgroundColor: "transparent",
+  },
+  btnDisabled: {
+    backgroundColor: Colors.border,
+  },
+  btnText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+  },
+
+  reviewHint: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  reviewPage: {
+    backgroundColor: Colors.card,
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: 14,
+    position: "relative",
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  reviewPageNum: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  reviewPageNumText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+  },
+  reviewPageImg: {
+    width: "100%",
+    height: 280,
+    backgroundColor: Colors.background,
+  },
+  reviewRemoveBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(239,68,68,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  emptyReview: {
+    alignItems: "center",
+    paddingTop: 60,
+    gap: 12,
+  },
+  emptyReviewText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    textAlign: "center",
+  },
+
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    color: Colors.text,
+  },
+
+  pdfPreviewCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 24,
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  actionBtnOutline: {
-    backgroundColor: Colors.card,
-    borderWidth: 2,
-    borderColor: Colors.border,
+  pdfIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: Colors.accentLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
   },
-  actionBtnCamera: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Colors.primary,
+  pdfFileName: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+    textAlign: "center",
+    marginBottom: 6,
   },
-  actionBtnSend: {
-    backgroundColor: Colors.accent,
+  pdfMeta: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
   },
-  actionBtnDisabled: {
+
+  thumbRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  thumbItem: {
+    position: "relative",
+  },
+  thumbImg: {
+    width: 70,
+    height: 90,
+    borderRadius: 8,
     backgroundColor: Colors.border,
   },
-  photoCount: {
+  thumbLabel: {
     position: "absolute",
-    alignSelf: "center",
-    backgroundColor: Colors.text,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  photoCountText: {
+    bottom: 4,
+    right: 4,
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
     color: "#fff",
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
   },
-  doneContainer: {
+
+  centeredContent: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 32,
   },
-  doneIconBox: {
+  successIconBox: {
     width: 120,
     height: 120,
     borderRadius: 30,
@@ -558,7 +879,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   doneTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontFamily: "Inter_700Bold",
     color: Colors.text,
     marginBottom: 12,
@@ -572,38 +893,14 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 8,
   },
+  doneFileName: {
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.primary,
+  },
   doneClient: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
-    color: Colors.primary,
-    textAlign: "center",
-  },
-  btn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    height: 52,
-    paddingHorizontal: 28,
-    gap: 8,
-    width: "100%",
-  },
-  btnPrimary: {
-    backgroundColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  btnOutline: {
-    backgroundColor: "transparent",
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
-  btnText: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-    color: "#fff",
+    color: Colors.accent,
+    marginTop: 8,
   },
 });

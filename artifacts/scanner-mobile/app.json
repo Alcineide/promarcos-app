@@ -17,7 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "br.com.mendesadvocacia.scanner",
       "infoPlist": {
-        "NSCameraUsageDescription": "Usado para escanear documentos dos clientes",
+        "NSCameraUsageDescription": "Usado para escanear documentos dos clientes com detecção automática de bordas",
         "NSPhotoLibraryUsageDescription": "Salvar documentos escaneados na galeria",
         "NSPhotoLibraryAddUsageDescription": "Salvar documentos escaneados na galeria"
       }
@@ -61,7 +61,8 @@
           "savePhotosPermission": "Salvar documentos escaneados na galeria",
           "isAccessMediaLocationEnabled": true
         }
-      ]
+      ],
+      "react-native-document-scanner-plugin"
     ],
     "experiments": {
       "typedRoutes": true,
