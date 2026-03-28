@@ -1,16 +1,32 @@
 import { Layout } from "@/components/layout";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 interface PesquisaResult {
   local: string;
+  encontrado: boolean;
   mensagem: string;
 }
+
+const FONTES = [
+  { key: "dap", label: "DAP" },
+  { key: "caf", label: "CAF" },
+  { key: "incra", label: "INCRA" },
+  { key: "cnis", label: "CNIS" },
+  { key: "ctps", label: "CTPS" },
+  { key: "tribunal", label: "TRIBUNAL" },
+  { key: "provas", label: "PROVAS" },
+  { key: "receita", label: "RECEITA" },
+  { key: "detran", label: "DETRAN" },
+  { key: "jusbrasil", label: "JUSBRASIL" },
+  { key: "inss", label: "INSS" },
+];
 
 export default function PesquisaCpf() {
   const [cpf, setCpf] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
   const [resultados, setResultados] = useState<PesquisaResult[]>([]);
   const [pesquisando, setPesquisando] = useState(false);
+  const [fonteAtual, setFonteAtual] = useState("");
   const [pesquisaFeita, setPesquisaFeita] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -29,7 +45,7 @@ export default function PesquisaCpf() {
     return `${nums.slice(0, 2)}/${nums.slice(2, 4)}/${nums.slice(4)}`;
   }
 
-  async function handlePesquisar() {
+  const handlePesquisar = useCallback(async () => {
     const cpfNumerico = cpf.replace(/\D/g, "");
     if (cpfNumerico.length !== 11) {
       setErro("CPF deve ter 11 dígitos");
@@ -40,21 +56,43 @@ export default function PesquisaCpf() {
     setErro("");
     setResultados([]);
 
-    try {
-      const res = await fetch(`/api/pesquisa-cpf/${cpfNumerico}`);
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Erro ao pesquisar");
+    const allSources = [
+      { key: "local", label: "Sistema Local" },
+      { key: "promarcos", label: "Promarcos" },
+      ...FONTES,
+    ];
+
+    for (const source of allSources) {
+      setFonteAtual(source.label);
+      try {
+        const res = await fetch(`/api/pesquisa-cpf/${source.key}/${cpfNumerico}`);
+        if (res.ok) {
+          const data = await res.json();
+          setResultados((prev) => [...prev, {
+            local: data.local || source.label,
+            encontrado: data.encontrado ?? false,
+            mensagem: data.mensagem || "Consulta realizada",
+          }]);
+        } else {
+          setResultados((prev) => [...prev, {
+            local: source.label,
+            encontrado: false,
+            mensagem: "Erro ao consultar",
+          }]);
+        }
+      } catch {
+        setResultados((prev) => [...prev, {
+          local: source.label,
+          encontrado: false,
+          mensagem: "Serviço indisponível",
+        }]);
       }
-      const data: PesquisaResult[] = await res.json();
-      setResultados(data);
-    } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro ao pesquisar CPF");
-    } finally {
-      setPesquisaFeita(true);
-      setPesquisando(false);
     }
-  }
+
+    setFonteAtual("");
+    setPesquisaFeita(true);
+    setPesquisando(false);
+  }, [cpf]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter") {
@@ -64,47 +102,38 @@ export default function PesquisaCpf() {
 
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto py-4">
-        <div className="mb-6 text-center">
-          <span className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/25 text-green-300 text-xs font-medium tracking-widest uppercase px-4 py-1.5 rounded-full mb-5">
-            <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.867-3.834zm-5.44.306a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>
-            </svg>
-            Consulta
-          </span>
-          <h1 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-foreground mb-2">
-            Pesquisa <span className="text-green-400">CPF</span>
-          </h1>
-          <p className="text-muted-foreground text-sm">Consulte informações por CPF e data de nascimento</p>
+      <div className="max-w-4xl mx-auto py-4">
+        <div className="mb-4 text-center">
+          <h2 className="font-display text-xl font-bold text-foreground">7. Pesquisa</h2>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="flex flex-col md:flex-row">
-            <div className="md:w-56 border-b md:border-b-0 md:border-r border-border p-5">
-              <h3 className="font-display font-bold text-sm text-foreground tracking-wide uppercase mb-4">Pesquisas</h3>
+            <div className="md:w-52 border-b md:border-b-0 md:border-r border-border p-4">
+              <h3 className="font-bold text-sm text-foreground uppercase mb-3">Pesquisas</h3>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">CPF:</label>
+                  <label className="block text-xs text-muted-foreground mb-0.5">CPF:</label>
                   <input
                     type="text"
                     value={cpf}
                     onChange={(e) => setCpf(formatCpf(e.target.value))}
                     onKeyDown={handleKeyDown}
                     placeholder="000.000.000-00"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-green-500/50 focus:border-green-500/50"
+                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Data Nascimento:</label>
+                  <label className="block text-xs text-muted-foreground mb-0.5">Data Nascimento:</label>
                   <input
                     type="text"
                     value={dataNascimento}
                     onChange={(e) => setDataNascimento(formatDate(e.target.value))}
                     onKeyDown={handleKeyDown}
                     placeholder="dd/mm/aaaa"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-green-500/50 focus:border-green-500/50"
+                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 font-mono"
                   />
                 </div>
 
@@ -115,43 +144,43 @@ export default function PesquisaCpf() {
                 <button
                   onClick={handlePesquisar}
                   disabled={pesquisando || !cpf.trim()}
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 disabled:cursor-not-allowed text-white font-bold text-sm py-2.5 px-4 rounded-lg transition-colors duration-200 mt-1"
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 disabled:cursor-not-allowed text-white font-bold text-sm py-2 px-3 rounded transition-colors duration-200"
                 >
-                  {pesquisando ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25"/>
-                        <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75"/>
-                      </svg>
-                      Pesquisando...
-                    </span>
-                  ) : (
-                    "Pesquisar CPF"
-                  )}
+                  {pesquisando ? "Pesquisando..." : "Pesquisar"}
                 </button>
+
+                {pesquisando && fonteAtual && (
+                  <p className="text-xs text-blue-400 animate-pulse">
+                    Acessando {fonteAtual}...
+                  </p>
+                )}
               </div>
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="grid grid-cols-[1fr_2fr] border-b border-border">
-                <div className="px-4 py-2.5 text-xs font-bold text-foreground uppercase tracking-wide bg-blue-600/20 border-r border-border">
+              <div className="grid grid-cols-[120px_1fr] border-b border-border bg-muted/30">
+                <div className="px-3 py-2 text-xs font-bold text-foreground uppercase tracking-wide border-r border-border">
                   Local
                 </div>
-                <div className="px-4 py-2.5 text-xs font-bold text-foreground uppercase tracking-wide bg-blue-600/20">
+                <div className="px-3 py-2 text-xs font-bold text-foreground uppercase tracking-wide">
                   Mensagem
                 </div>
               </div>
 
-              <div className="min-h-[200px] max-h-[500px] overflow-y-auto">
+              <div className="min-h-[300px] max-h-[500px] overflow-y-auto">
                 {resultados.length > 0 ? (
                   resultados.map((r, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_2fr] border-b border-border last:border-b-0">
-                      <div className="px-4 py-3 text-sm text-foreground border-r border-border font-medium">{r.local}</div>
-                      <div className="px-4 py-3 text-sm text-muted-foreground">{r.mensagem}</div>
+                    <div key={i} className="grid grid-cols-[120px_1fr] border-b border-border last:border-b-0">
+                      <div className={`px-3 py-2 text-sm border-r border-border font-medium ${r.encontrado ? "text-green-400" : "text-muted-foreground"}`}>
+                        {r.local}
+                      </div>
+                      <div className={`px-3 py-2 text-sm ${r.encontrado ? "text-foreground" : "text-muted-foreground"}`}>
+                        {r.mensagem}
+                      </div>
                     </div>
                   ))
                 ) : (
-                  <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground/50">
+                  <div className="flex items-center justify-center h-[300px] text-sm text-muted-foreground/50">
                     {pesquisaFeita ? "Nenhuma pesquisa encontrada" : "Nenhuma pesquisa"}
                   </div>
                 )}

@@ -198,162 +198,109 @@ router.delete("/anexos/:id", async (req, res) => {
 
 const PROMARCOS_BASE = "https://api.onprise.com.br/api";
 
-router.get("/pesquisa-cpf/:cpf", async (req, res) => {
+async function fetchWithTimeout(url: string, timeoutMs = 30000): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+router.get("/pesquisa-cpf/local/:cpf", async (req, res) => {
   try {
     const cpfRaw = req.params.cpf.replace(/\D/g, "");
     if (cpfRaw.length !== 11) {
-      res.status(400).json({ error: "CPF inválido" });
+      res.json({ local: "Sistema Local", encontrado: false, mensagem: "CPF inválido" });
       return;
     }
-
-    const results: { local: string; mensagem: string }[] = [];
-
-    const localPromise = db
+    const clientes = await db
       .select()
       .from(clientesTable)
-      .where(sql`REPLACE(REPLACE(REPLACE(${clientesTable.cpf}, '.', ''), '-', ''), ' ', '') = ${cpfRaw}`)
-      .then((clientes) => {
-        if (clientes.length > 0) {
-          for (const c of clientes) {
-            const escritorioInfo = c.escritorio ? ` | Escritório: ${c.escritorio}` : "";
-            results.push({
-              local: "Sistema Local",
-              mensagem: `Encontrado: ${c.nomeCompleto} (CPF: ${c.cpf})${escritorioInfo}`,
-            });
-            if (c.telefone) {
-              results.push({
-                local: "Sistema Local",
-                mensagem: `Telefone: ${c.telefone}${c.telefone2 ? ` / ${c.telefone2}` : ""}`,
-              });
-            }
-            if (c.email) {
-              results.push({
-                local: "Sistema Local",
-                mensagem: `E-mail: ${c.email}`,
-              });
-            }
-            if (c.cidade && c.estado) {
-              results.push({
-                local: "Sistema Local",
-                mensagem: `Endereço: ${c.logradouro || ""} ${c.numero || ""}, ${c.bairro || ""} - ${c.cidade}/${c.estado}`,
-              });
-            }
-          }
-        } else {
-          results.push({
-            local: "Sistema Local",
-            mensagem: "CPF não encontrado no sistema local",
-          });
-        }
-      })
-      .catch(() => {
-        results.push({
-          local: "Sistema Local",
-          mensagem: "Erro ao consultar sistema local",
-        });
-      });
+      .where(sql`REPLACE(REPLACE(REPLACE(${clientesTable.cpf}, '.', ''), '-', ''), ' ', '') = ${cpfRaw}`);
 
-    const promarkosPromise = (async () => {
-      const ctrl = new AbortController();
-      const timeout = setTimeout(() => ctrl.abort(), 15000);
-      try {
-        const upstream = await fetch(`${PROMARCOS_BASE}/pessoas/buscarcpf/${cpfRaw}`, { signal: ctrl.signal });
-        clearTimeout(timeout);
-        if (!upstream.ok) throw new Error(`HTTP ${upstream.status}`);
-        const data = await upstream.json();
-        if (data.existe && Array.isArray(data.pessoas) && data.pessoas.length > 0) {
-          for (const p of data.pessoas) {
-            const nascimento = p.nascimento
-              ? ` | Nasc: ${new Date(p.nascimento).toLocaleDateString("pt-BR")}`
-              : "";
-            const cidade = p.cidade && p.estado ? ` | ${p.cidade}/${p.estado}` : "";
-            results.push({
-              local: "Promarcos",
-              mensagem: `Encontrado: ${p.razao_social} (Cód: ${p.codigo})${nascimento}${cidade}`,
-            });
-            if (p.telefone1) {
-              results.push({
-                local: "Promarcos",
-                mensagem: `Telefone: ${p.telefone1}${p.telefone2 ? ` / ${p.telefone2}` : ""}`,
-              });
-            }
-            if (p.email1) {
-              results.push({
-                local: "Promarcos",
-                mensagem: `E-mail: ${p.email1}`,
-              });
-            }
-            if (p.profissao) {
-              results.push({
-                local: "Promarcos",
-                mensagem: `Profissão: ${p.profissao}`,
-              });
-            }
-          }
-
-          const pessoaId = data.pessoas[0].codigo;
-          try {
-            const procCtrl = new AbortController();
-            const procTimeout = setTimeout(() => procCtrl.abort(), 15000);
-            const procRes = await fetch(`${PROMARCOS_BASE}/processo?clienteId=${pessoaId}`, { signal: procCtrl.signal });
-            clearTimeout(procTimeout);
-            if (procRes.ok) {
-              const processos = await procRes.json();
-              if (Array.isArray(processos) && processos.length > 0) {
-                results.push({
-                  local: "Promarcos",
-                  mensagem: `${processos.length} processo(s) encontrado(s)`,
-                });
-                for (const proc of processos.slice(0, 5)) {
-                  const status = proc.StatusAtual || proc.situacao || "";
-                  const beneficio = proc.beneficio || "";
-                  const numero = proc.numeroprocesso || "Sem número";
-                  results.push({
-                    local: "Promarcos",
-                    mensagem: `Processo: ${numero} | ${beneficio} | Status: ${status}`,
-                  });
-                }
-                if (processos.length > 5) {
-                  results.push({
-                    local: "Promarcos",
-                    mensagem: `... e mais ${processos.length - 5} processo(s)`,
-                  });
-                }
-              }
-            }
-          } catch {
-            results.push({
-              local: "Promarcos",
-              mensagem: "Erro ao consultar processos",
-            });
-          }
-        } else {
-          results.push({
-            local: "Promarcos",
-            mensagem: "CPF não encontrado no Promarcos",
-          });
-        }
-      } catch {
-        results.push({
-          local: "Promarcos",
-          mensagem: "Erro ao consultar Promarcos (timeout ou indisponível)",
-        });
-      }
-    })();
-
-    await Promise.all([localPromise, promarkosPromise]);
-
-    const sorted = results.sort((a, b) => {
-      if (a.local === "Sistema Local" && b.local !== "Sistema Local") return -1;
-      if (a.local !== "Sistema Local" && b.local === "Sistema Local") return 1;
-      return 0;
-    });
-
-    res.json(sorted);
+    if (clientes.length > 0) {
+      const detalhes = clientes.map((c) => ({
+        nome: c.nomeCompleto,
+        cpf: c.cpf,
+        escritorio: c.escritorio || "",
+        telefone: c.telefone || "",
+        telefone2: c.telefone2 || "",
+        email: c.email || "",
+        cidade: c.cidade || "",
+        estado: c.estado || "",
+        logradouro: c.logradouro || "",
+        numero: c.numero || "",
+        bairro: c.bairro || "",
+      }));
+      res.json({ local: "Sistema Local", encontrado: true, mensagem: "Dados encontrados para esta consulta", detalhes });
+    } else {
+      res.json({ local: "Sistema Local", encontrado: false, mensagem: "Nenhum dado encontrado para esta consulta" });
+    }
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ error: "Erro interno" });
+    res.json({ local: "Sistema Local", encontrado: false, mensagem: "Erro ao consultar sistema local" });
   }
 });
+
+router.get("/pesquisa-cpf/promarcos/:cpf", async (req, res) => {
+  try {
+    const cpfRaw = req.params.cpf.replace(/\D/g, "");
+    const upstream = await fetchWithTimeout(`${PROMARCOS_BASE}/pessoas/buscarcpf/${cpfRaw}`);
+    if (!upstream.ok) throw new Error(`HTTP ${upstream.status}`);
+    const data = await upstream.json();
+    if (data.existe && Array.isArray(data.pessoas) && data.pessoas.length > 0) {
+      const detalhes = data.pessoas.map((p: Record<string, unknown>) => ({
+        nome: p.razao_social,
+        codigo: p.codigo,
+        cpf: p.cpf,
+        nascimento: p.nascimento,
+        telefone1: p.telefone1 || "",
+        telefone2: p.telefone2 || "",
+        email: p.email1 || "",
+        profissao: p.profissao || "",
+        cidade: p.cidade || "",
+        estado: p.estado || "",
+      }));
+      res.json({ local: "Promarcos", encontrado: true, mensagem: "Dados encontrados para esta consulta", detalhes });
+    } else {
+      res.json({ local: "Promarcos", encontrado: false, mensagem: "Nenhum dado encontrado para esta consulta" });
+    }
+  } catch {
+    res.json({ local: "Promarcos", encontrado: false, mensagem: "Erro ao consultar Promarcos" });
+  }
+});
+
+const PESQUISA_SOURCES = ["dap", "caf", "incra", "cnis", "ctps", "tribunal", "provas", "receita", "detran", "jusbrasil", "inss"] as const;
+
+for (const source of PESQUISA_SOURCES) {
+  router.get(`/pesquisa-cpf/${source}/:cpf`, async (req, res) => {
+    const cpfRaw = req.params.cpf.replace(/\D/g, "");
+    const label = source.toUpperCase();
+    try {
+      const upstream = await fetchWithTimeout(`${PROMARCOS_BASE}/pesquisa/${source}/${cpfRaw}`, 30000);
+      if (!upstream.ok) {
+        const contentType = upstream.headers.get("content-type") || "";
+        if (contentType.includes("json")) {
+          const data = await upstream.json();
+          const found = data && (data.encontrado === true || data.existe === true || (Array.isArray(data) && data.length > 0));
+          res.json({ local: label, encontrado: found, mensagem: found ? "Dados encontrados para esta consulta" : "Nenhum dado encontrado para esta consulta", dados: data });
+        } else {
+          res.json({ local: label, encontrado: false, mensagem: "Nenhum dado encontrado para esta consulta" });
+        }
+        return;
+      }
+      const data = await upstream.json();
+      const found = data && (data.encontrado === true || data.existe === true || (Array.isArray(data) && data.length > 0) || (typeof data === "object" && Object.keys(data).length > 0));
+      res.json({ local: label, encontrado: !!found, mensagem: found ? "Dados encontrados para esta consulta" : "Nenhum dado encontrado para esta consulta", dados: data });
+    } catch {
+      res.json({ local: label, encontrado: false, mensagem: "Serviço temporariamente indisponível" });
+    }
+  });
+}
 
 export default router;
