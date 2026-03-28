@@ -63,8 +63,12 @@ export default function RootLayout() {
 
   useEffect(() => {
     startAuditSync();
-    startAutoSync();
-    setTimeout(() => triggerSync(), 2000);
+    const cleanupSync = startAutoSync();
+    const startupTimer = setTimeout(() => triggerSync(), 2000);
+    return () => {
+      if (cleanupSync) cleanupSync();
+      clearTimeout(startupTimer);
+    };
   }, []);
 
   if (!fontsLoaded && !fontError) return null;
