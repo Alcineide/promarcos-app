@@ -8,6 +8,7 @@ import Home from "./pages/home";
 import ClientForm from "./pages/client-form";
 import Veiculos from "./pages/veiculos";
 import PesquisaCpf from "./pages/pesquisa-cpf";
+import CadastroProvas from "./pages/cadastro-provas";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/cliente/:id" component={ClientForm} />
       <Route path="/veiculos" component={Veiculos} />
       <Route path="/pesquisa-cpf" component={PesquisaCpf} />
+      <Route path="/cadastro-provas" component={CadastroProvas} />
       <Route component={NotFound} />
     </Switch>
   );
