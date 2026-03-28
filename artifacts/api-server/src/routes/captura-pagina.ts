@@ -270,6 +270,7 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
     executablePath: CHROMIUM_PATH,
     headless: true,
     args: CHROMIUM_ARGS,
+    protocolTimeout: 120000,
   });
 
   try {
@@ -329,6 +330,7 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
       executablePath: CHROMIUM_PATH,
       headless: true,
       args: CHROMIUM_ARGS,
+      protocolTimeout: 120000,
     });
 
     try {
@@ -449,6 +451,7 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
       executablePath: CHROMIUM_PATH,
       headless: true,
       args: CHROMIUM_ARGS,
+      protocolTimeout: 120000,
     });
 
     const capturas: Buffer[] = [];
