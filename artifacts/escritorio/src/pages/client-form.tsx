@@ -145,7 +145,7 @@ export default function ClientForm() {
   const deleteAnexo = useDeleteAnexo();
 
   // --- Form Setup ---
-  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<ClientFormData>({
+  const { register, handleSubmit, setValue, watch, reset, getValues, formState: { errors } } = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
     defaultValues: { escritorio: "Mendes Advocacia - Matriz" }
   });
@@ -173,6 +173,17 @@ export default function ClientForm() {
       setValue("escritorio", clientData.escritorio);
     }
   }, [clientData?.escritorio, empresas, setValue]);
+
+  useEffect(() => {
+    if (promarkosPreloaded && empresas.length > 0) {
+      const current = getValues("escritorio");
+      const isValid = empresas.some(e => e.nome === current);
+      if (!current || !isValid) {
+        const araguaina = empresas.find(e => e.nome.toLowerCase().includes("araguaín") || e.nome.toLowerCase().includes("araguain"));
+        setValue("escritorio", araguaina?.nome || empresas[0].nome);
+      }
+    }
+  }, [promarkosPreloaded, empresas, setValue, getValues]);
 
   useEffect(() => {
     capturedPreviews.forEach(url => URL.revokeObjectURL(url));
