@@ -5,7 +5,14 @@ const router: IRouter = Router();
 
 const CHROMIUM_PATH = "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium";
 
-const SITE_CONFIGS: Record<string, { url: string; selectorCpf?: string; selectorSubmit?: string; waitFor?: string }> = {
+interface SiteConfig {
+  url: string;
+  automacao?: "pje_trf1";
+}
+
+const PJE_TRF1_URL = "https://pje1g-consultapublica.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam";
+
+const SITE_CONFIGS: Record<string, SiteConfig> = {
   dap: { url: "https://smap14.mda.gov.br/extratodap/PesquisarDAP" },
   caf: { url: "https://caf.mda.gov.br/consulta-publica/ufpa" },
   incra: { url: "https://saladacidadania.incra.gov.br" },
@@ -16,13 +23,13 @@ const SITE_CONFIGS: Record<string, { url: string; selectorCpf?: string; selector
   sisrgp: { url: "https://sistemas.mpa.gov.br/sisrgp/pages/consultar/consultarLicencaPublico.jsf" },
   cnd_to: { url: "https://app.sefaz.to.gov.br/SINTEGRA-WEB/" },
   contag: { url: "https://www.contag.org.br" },
-  pje_trf1: { url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam" },
-  trf1_secao_to: { url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam" },
-  trf1_araguaina: { url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam" },
-  trf1_balsas: { url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam" },
-  trf1_imperatriz: { url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam" },
-  trf1_palmas: { url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam" },
-  trf1_gurupi: { url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam" },
+  pje_trf1: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
+  trf1_secao_to: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
+  trf1_araguaina: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
+  trf1_balsas: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
+  trf1_imperatriz: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
+  trf1_palmas: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
+  trf1_gurupi: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
   tse_local_votacao: { url: "https://www.tse.jus.br/servicos-eleitorais/titulo-e-local-de-votacao/consulta-por-nome" },
   tse_certidao: { url: "https://www.tse.jus.br/servicos-eleitorais/certidoes/certidao-de-quitacao-eleitoral" },
 };
