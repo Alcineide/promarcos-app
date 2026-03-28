@@ -1,5 +1,9 @@
 import { Router, type IRouter } from "express";
-import puppeteer from "puppeteer-core";
+import puppeteerExtra from "puppeteer-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import puppeteerCore from "puppeteer-core";
+
+puppeteerExtra.use(StealthPlugin());
 
 const router: IRouter = Router();
 
@@ -234,7 +238,7 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
     throw new Error(`Site ${siteKey} não configurado`);
   }
 
-  const browser = await puppeteer.launch({
+  const browser = await puppeteerExtra.launch({
     executablePath: CHROMIUM_PATH,
     headless: true,
     args: CHROMIUM_ARGS,
@@ -243,6 +247,7 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900 });
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
     await page.goto(config.url, {
       waitUntil: "networkidle2",
@@ -292,7 +297,7 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
     const config = SITE_CONFIGS[siteKey];
     req.log.info({ siteKey, cpf }, "Consultando site com captura");
 
-    const browser = await puppeteer.launch({
+    const browser = await puppeteerExtra.launch({
       executablePath: CHROMIUM_PATH,
       headless: true,
       args: CHROMIUM_ARGS,
@@ -301,6 +306,7 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
     try {
       const page = await browser.newPage();
       await page.setViewport({ width: 1280, height: 900 });
+      await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
       await page.goto(config.url, {
         waitUntil: "networkidle2",
@@ -324,9 +330,15 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
         || /sua pesquisa não encontrou/i.test(pageText)
         || /0 resultados? encontrados?/i.test(pageText);
 
+      const dataAtual = new Date().toLocaleDateString("pt-BR") + ", " + new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      const pageUrl = await page.url();
+
       const consultaPdfOptions: Parameters<typeof page.pdf>[0] = {
         printBackground: true,
-        margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+        margin: { top: "20mm", bottom: "15mm", left: "10mm", right: "10mm" },
+        displayHeaderFooter: true,
+        headerTemplate: `<div style="font-size:9px;font-family:Arial,sans-serif;color:#555;width:100%;padding:0 15mm;display:flex;justify-content:space-between;"><span>${dataAtual}</span><span style="max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pageUrl}</span></div>`,
+        footerTemplate: `<div style="font-size:9px;font-family:Arial,sans-serif;color:#555;width:100%;padding:0 15mm;display:flex;justify-content:space-between;"><span>${pageUrl}</span><span><span class="pageNumber"></span>/<span class="totalPages"></span></span></div>`,
       };
 
       if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
@@ -394,7 +406,7 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
       return;
     }
 
-    const browser = await puppeteer.launch({
+    const browser = await puppeteerExtra.launch({
       executablePath: CHROMIUM_PATH,
       headless: true,
       args: CHROMIUM_ARGS,
@@ -405,6 +417,7 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
     try {
       const page = await browser.newPage();
       await page.setViewport({ width: 1280, height: 900 });
+      await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
       for (const siteKey of sites) {
         const config = SITE_CONFIGS[siteKey];
