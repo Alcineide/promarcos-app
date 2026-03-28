@@ -22,12 +22,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem(SESSION_KEY);
+    const stored = sessionStorage.getItem(SESSION_KEY);
     if (stored) {
       try {
         setUser(JSON.parse(stored));
       } catch {
-        localStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem(SESSION_KEY);
       }
     }
     setIsLoading(false);
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
       };
       setUser(userData);
-      localStorage.setItem(SESSION_KEY, JSON.stringify(userData));
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(userData));
       return { success: true };
     } catch {
       return { success: false, message: "Erro ao conectar com o servidor" };
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
   };
 
   return (
