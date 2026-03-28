@@ -4,6 +4,7 @@ import clientesRouter from "./clientes";
 import promarcosRouter from "./promarcos";
 import capturaPaginaRouter from "./captura-pagina";
 import downloadProjetoRouter from "./download-projeto";
+import documentosRouter from "./documentos";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(clientesRouter);
 router.use(promarcosRouter);
 router.use(capturaPaginaRouter);
 router.use(downloadProjetoRouter);
+router.use(documentosRouter);
 
 export default router;

@@ -430,9 +430,82 @@ export default function ClientForm() {
 
   // --- Local State for Documents ---
   const [generatedDocs, setGeneratedDocs] = useState<{name: string, date: Date}[]>([]);
-  const generateDoc = (name: string) => {
-    setGeneratedDocs(prev => [{ name, date: new Date() }, ...prev]);
-    toast({ title: "Documento Gerado", description: `${name} gerado com sucesso.` });
+  const [generatingDoc, setGeneratingDoc] = useState<string | null>(null);
+
+  const getClienteDocData = () => {
+    const vals = getValues();
+    return {
+      nomeCompleto: vals.nomeCompleto,
+      cpf: vals.cpf,
+      rg: vals.rgRepresentante || "",
+      orgaoEmissor: vals.orgaoEmissor || "",
+      estadoCivil: vals.estadoCivil,
+      profissao: vals.profissao,
+      dataNascimento: vals.dataNascimento,
+      sexo: vals.sexo,
+      logradouro: vals.logradouro,
+      numero: vals.numero,
+      complemento: vals.complemento || "",
+      bairro: vals.bairro,
+      cidade: vals.cidade,
+      estado: vals.estado,
+      cep: vals.cep,
+      telefone: vals.telefone,
+      email: vals.email || "",
+      escritorio: vals.escritorio,
+    };
+  };
+
+  const generateDoc = async (name: string) => {
+    const clienteData = getClienteDocData();
+    if (!clienteData.nomeCompleto || !clienteData.cpf) {
+      toast({ title: "Erro", description: "Preencha os dados do cliente antes de gerar documentos.", variant: "destructive" });
+      return;
+    }
+
+    if (name === "Pacote Completo") {
+      const tipos = ["Procuração Extra", "Contrato", "Declaração não incidência", "Declaração Hipossuficiência", "Termo de Risco", "Revogação"];
+      setGeneratingDoc("Pacote Completo");
+      for (const tipo of tipos) {
+        await downloadSingleDoc(tipo, clienteData);
+      }
+      setGeneratingDoc(null);
+      toast({ title: "Pacote Completo", description: "Todos os documentos foram gerados." });
+      return;
+    }
+
+    setGeneratingDoc(name);
+    await downloadSingleDoc(name, clienteData);
+    setGeneratingDoc(null);
+  };
+
+  const downloadSingleDoc = async (tipo: string, clienteData: ReturnType<typeof getClienteDocData>) => {
+    try {
+      const res = await fetch("/api/documentos/gerar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo, cliente: clienteData }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ mensagem: "Erro desconhecido" }));
+        toast({ title: "Erro", description: (err as { mensagem?: string }).mensagem || "Erro ao gerar documento", variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="?([^";\s]+)"?/);
+      const fileName = match?.[1] || `${tipo.replace(/\s+/g, "_")}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      setGeneratedDocs(prev => [{ name: tipo, date: new Date() }, ...prev]);
+      toast({ title: "Documento Gerado", description: `${tipo} baixado com sucesso.` });
+    } catch {
+      toast({ title: "Erro", description: "Erro ao conectar com o servidor", variant: "destructive" });
+    }
   };
 
   const [isProcessoModalOpen, setProcessoModalOpen] = useState(false);
@@ -1189,14 +1262,15 @@ export default function ClientForm() {
                   <h2 className="text-xl font-bold flex items-center gap-2">
                     <FileText className="w-5 h-5 text-primary" /> Gerar Documentos Digitais
                   </h2>
-                  <button type="button" onClick={() => generateDoc("Pacote Completo")} className="px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors text-sm">
+                  <button type="button" disabled={!!generatingDoc} onClick={() => generateDoc("Pacote Completo")} className="px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50 flex items-center gap-2">
+                    {generatingDoc === "Pacote Completo" && <Loader2 className="w-4 h-4 animate-spin" />}
                     Gerar Todos
                   </button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {["Procuração Extra", "Contrato", "Declaração não incidência", "Declaração Hipossuficiência", "Termo de Risco", "Revogação"].map(doc => (
-                    <button type="button" key={doc} onClick={() => generateDoc(doc)} className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/40 transition-all font-semibold flex flex-col items-center justify-center gap-2 text-center h-24">
-                      <FilePlus2 className="w-6 h-6" />
+                    <button type="button" key={doc} disabled={!!generatingDoc} onClick={() => generateDoc(doc)} className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/40 transition-all font-semibold flex flex-col items-center justify-center gap-2 text-center h-24 disabled:opacity-50">
+                      {generatingDoc === doc ? <Loader2 className="w-6 h-6 animate-spin" /> : <FilePlus2 className="w-6 h-6" />}
                       <span className="text-sm leading-tight">{doc}</span>
                     </button>
                   ))}
