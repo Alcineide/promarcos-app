@@ -10,7 +10,6 @@ interface PesquisaResult {
 
 const CONSULTAS = [
   { key: "local", label: "Sistema Local" },
-  { key: "promarcos", label: "Promarcos" },
   { key: "dap", label: "DAP", url: "https://smap14.mda.gov.br/extratodap/PesquisarDAP", descricao: "Declaração de Aptidão ao PRONAF" },
   { key: "caf", label: "CAF", url: "https://caf.mda.gov.br/consulta-publica/ufpa", descricao: "Cadastro da Agricultura Familiar" },
   { key: "incra", label: "INCRA", url: "https://saladacidadania.incra.gov.br", descricao: "Sala da Cidadania - INCRA" },
