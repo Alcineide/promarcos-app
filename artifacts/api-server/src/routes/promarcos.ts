@@ -263,7 +263,8 @@ router.get("/promarcos/folharosto/:pessoaId", async (req, res) => {
     const upstream = await fetch(`${PROMARCOS_BASE}/pessoas/relatorio/${pessoaId}/1`);
     if (!upstream.ok) {
       const text = await upstream.text();
-      return res.status(upstream.status).send(text);
+      res.status(upstream.status).send(text);
+      return;
     }
     const contentType = upstream.headers.get("content-type") || "application/pdf";
     const contentDisposition = upstream.headers.get("content-disposition") || `attachment; filename="folha_rosto_${pessoaId}.pdf"`;

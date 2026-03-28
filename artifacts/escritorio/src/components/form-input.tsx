@@ -8,7 +8,7 @@ export interface FormContext {
   errors: FieldErrors<any>;
 }
 
-interface FormInputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface FormInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'form'> {
   form: FormContext;
   label: string;
   name: string;

@@ -5,12 +5,12 @@ import { useListClientes } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout";
 import { motion } from "framer-motion";
 import { formatCPF } from "@/lib/utils";
-import { buscarPorCpf, type PromarcosPessoa } from "@/lib/promarcos-api";
+import { buscarPorCpf, type PromarkosPessoa } from "@/lib/promarcos-api";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [promarkosResult, setPromarkosResult] = useState<{ existe: boolean; pessoa?: PromarcosPessoa } | null>(null);
+  const [promarkosResult, setPromarkosResult] = useState<{ existe: boolean; pessoa?: PromarkosPessoa } | null>(null);
   const [promarkosLoading, setPromarkosLoading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   

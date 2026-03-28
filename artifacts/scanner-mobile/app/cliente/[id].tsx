@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import { readAsStringAsync, EncodingType, documentDirectory, makeDirectoryAsync, copyAsync, getInfoAsync } from "expo-file-system";
+import { readAsStringAsync, documentDirectory, makeDirectoryAsync, copyAsync, getInfoAsync } from "expo-file-system/build/legacy/FileSystem";
+import { EncodingType } from "expo-file-system/build/legacy/FileSystem.types";
 import * as Haptics from "expo-haptics";
 import * as MediaLibrary from "expo-media-library";
 import * as Print from "expo-print";

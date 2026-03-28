@@ -56,7 +56,7 @@ router.get("/clientes/:id", async (req, res) => {
   try {
     const { id } = GetClienteParams.parse({ id: Number(req.params.id) });
     const [cliente] = await db.select().from(clientesTable).where(eq(clientesTable.id, id));
-    if (!cliente) return res.status(404).json({ error: "Cliente não encontrado" });
+    if (!cliente) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
     res.json({
       ...cliente,
       createdAt: cliente.createdAt.toISOString(),
@@ -77,7 +77,7 @@ router.put("/clientes/:id", async (req, res) => {
       .set(body)
       .where(eq(clientesTable.id, id))
       .returning();
-    if (!cliente) return res.status(404).json({ error: "Cliente não encontrado" });
+    if (!cliente) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
     res.json({
       ...cliente,
       createdAt: cliente.createdAt.toISOString(),
@@ -137,7 +137,7 @@ router.put("/processos/:id", async (req, res) => {
       .set(req.body)
       .where(eq(processosTable.id, id))
       .returning();
-    if (!processo) return res.status(404).json({ error: "Processo não encontrado" });
+    if (!processo) { res.status(404).json({ error: "Processo não encontrado" }); return; }
     res.json({
       ...processo,
       createdAt: processo.createdAt.toISOString(),
