@@ -23,16 +23,12 @@ const CONSULTAS = [
 
 export default function PesquisaCpf() {
   const [cpf, setCpf] = useState("");
-  const [nomeCompleto, setNomeCompleto] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
-  const [nomeMae, setNomeMae] = useState("");
-  const [nomePai, setNomePai] = useState("");
   const [resultados, setResultados] = useState<PesquisaResult[]>([]);
   const [pesquisando, setPesquisando] = useState(false);
   const [fonteAtual, setFonteAtual] = useState("");
   const [pesquisaFeita, setPesquisaFeita] = useState(false);
   const [erro, setErro] = useState("");
-  const [lendoRg, setLendoRg] = useState(false);
 
   function formatCpf(value: string) {
     const nums = value.replace(/\D/g, "").slice(0, 11);
@@ -71,7 +67,7 @@ export default function PesquisaCpf() {
         const res = await fetch("/api/pesquisa/consultar-site", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ siteKey: consulta.key, cpf: cpfNumerico, nome: nomeCompleto, dataNascimento, nomeMae, nomePai }),
+          body: JSON.stringify({ siteKey: consulta.key, cpf: cpfNumerico, dataNascimento }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -100,7 +96,7 @@ export default function PesquisaCpf() {
     setFonteAtual("");
     setPesquisaFeita(true);
     setPesquisando(false);
-  }, [cpf, nomeCompleto, dataNascimento, nomeMae, nomePai]);
+  }, [cpf, dataNascimento]);
 
   function getSiteKey(label: string): string | null {
     const consulta = CONSULTAS.find(c => c.label === label);
@@ -189,34 +185,6 @@ export default function PesquisaCpf() {
     if (e.key === "Enter") handlePesquisar();
   }
 
-  async function handleLerRg(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLendoRg(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        try {
-          const res = await fetch("/api/pesquisa/extrair-rg", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ fileName: file.name, fileBase64: base64, mimeType: file.type }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.nomeMae) setNomeMae(data.nomeMae.toUpperCase());
-            if (data.nomePai) setNomePai(data.nomePai.toUpperCase());
-          }
-        } catch { /* silently fail */ }
-        setLendoRg(false);
-      };
-      reader.readAsDataURL(file);
-    } catch {
-      setLendoRg(false);
-    }
-    e.target.value = "";
-  }
 
   return (
     <Layout>
@@ -244,18 +212,6 @@ export default function PesquisaCpf() {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-0.5">Nome Completo:</label>
-                  <input
-                    type="text"
-                    value={nomeCompleto}
-                    onChange={(e) => setNomeCompleto(e.target.value.toUpperCase())}
-                    onKeyDown={handleKeyDown}
-                    placeholder="NOME COMPLETO"
-                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 uppercase"
-                  />
-                </div>
-
-                <div>
                   <label className="block text-xs text-muted-foreground mb-0.5">Data Nascimento:</label>
                   <input
                     type="text"
@@ -266,45 +222,6 @@ export default function PesquisaCpf() {
                     className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 font-mono"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-0.5">Nome da Mãe:</label>
-                  <input
-                    type="text"
-                    value={nomeMae}
-                    onChange={(e) => setNomeMae(e.target.value.toUpperCase())}
-                    onKeyDown={handleKeyDown}
-                    placeholder="NOME DA MÃE"
-                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 uppercase"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-0.5">Nome do Pai:</label>
-                  <input
-                    type="text"
-                    value={nomePai}
-                    onChange={(e) => setNomePai(e.target.value.toUpperCase())}
-                    onKeyDown={handleKeyDown}
-                    placeholder="NOME DO PAI"
-                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 uppercase"
-                  />
-                </div>
-
-                <label className={`flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded text-sm font-medium cursor-pointer transition-colors ${lendoRg ? "bg-yellow-600/50 text-yellow-300" : "bg-blue-600 hover:bg-blue-700 text-white"}`}>
-                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path d="M1 8a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 018.07 3h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0016.07 6H17a2 2 0 012 2v7a2 2 0 01-2 2H3a2 2 0 01-2-2V8z" />
-                    <path d="M10 14a3 3 0 100-6 3 3 0 000 6z" />
-                  </svg>
-                  {lendoRg ? "Lendo..." : "Ler RG"}
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                    onChange={handleLerRg}
-                    className="hidden"
-                    disabled={lendoRg}
-                  />
-                </label>
 
                 {erro && (
                   <p className="text-xs text-red-400">{erro}</p>

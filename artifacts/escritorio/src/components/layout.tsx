@@ -89,9 +89,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 py-6 px-4 overflow-y-auto">
-          {/* Clientes section */}
+          {/* Clientes section - Cyan/Teal */}
           <div className="mb-1">
-            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-primary-foreground/30">
+            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-cyan-400/60">
               Clientes
             </p>
             <div className="space-y-1">
@@ -105,11 +105,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group",
                       isActive
-                        ? "bg-primary-foreground/10 text-accent"
-                        : "text-primary-foreground/70 hover:bg-primary-foreground/5 hover:text-primary-foreground"
+                        ? "bg-cyan-500/15 text-cyan-300 border-l-2 border-cyan-400"
+                        : "text-primary-foreground/70 hover:bg-cyan-500/10 hover:text-cyan-300"
                     )}
                   >
-                    <item.icon className={cn("h-5 w-5", isActive ? "text-accent" : "text-primary-foreground/50 group-hover:text-primary-foreground/80")} />
+                    <item.icon className={cn("h-5 w-5", isActive ? "text-cyan-400" : "text-primary-foreground/50 group-hover:text-cyan-400")} />
                     {item.label}
                   </Link>
                 );
@@ -120,9 +120,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {/* Divider */}
           <div className="my-4 border-t border-primary-foreground/10" />
 
-          {/* Frota section */}
+          {/* Frota section - Orange */}
           <div>
-            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-primary-foreground/30">
+            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-orange-400/60">
               Frota de Veículos
             </p>
             <div className="space-y-1">
@@ -150,9 +150,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {/* Divider */}
           <div className="my-4 border-t border-primary-foreground/10" />
 
-          {/* Pesquisa Litispendência */}
+          {/* Pesquisa Litispendência - Green */}
           <div>
-            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-primary-foreground/30">
+            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-green-400/60">
               Pesquisa
             </p>
             <div className="space-y-1">
@@ -162,11 +162,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group",
                   location === "/pesquisa-cpf"
-                    ? "bg-primary-foreground/10 text-accent"
-                    : "text-primary-foreground/70 hover:bg-primary-foreground/5 hover:text-primary-foreground"
+                    ? "bg-green-500/15 text-green-300 border-l-2 border-green-400"
+                    : "text-primary-foreground/70 hover:bg-green-500/10 hover:text-green-300"
                 )}
               >
-                <FileSearch className={cn("h-5 w-5", location === "/pesquisa-cpf" ? "text-accent" : "text-primary-foreground/50 group-hover:text-primary-foreground/80")} />
+                <FileSearch className={cn("h-5 w-5", location === "/pesquisa-cpf" ? "text-green-400" : "text-primary-foreground/50 group-hover:text-green-400")} />
                 Pesquisa de Litispendência
               </Link>
             </div>
