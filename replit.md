@@ -17,6 +17,7 @@ Sistema complementar de cadastro de clientes para o escritório Mendes Advocacia
 - **ZapSign**: gera PDFs (Procuração, Contrato, Declarações, Termo de Risco, Revogação) e envia ao ZapSign; modo lote usa `upload-extra-doc` do ZapSign (primeiro doc como principal, demais como docs vinculados — assinatura única); `signUrl` salvo do retorno ZapSign; cards com status "Pendente"/"Assinado", botões visualizar/baixar/assinar/excluir, "Assinar Todos" (dedup por signUrl no lote), webhook para atualização automática de status; `auth_mode: assinaturaTela`, WhatsApp auto-send ativado
 - **Anexos** de documentos
 - **Auditoria invisível**: sistema silencioso que registra ações dos colaboradores (buscas, uploads) com geolocalização e suporte offline via SQLite local, sincronização automática com PostgreSQL
+- **Modo Offline (Scanner Mobile)**: AsyncStorage-backed persistent scan queue with upload status tracking (pending/syncing/synced/failed); `NetworkProvider` context with `useNetworkStatus` hook via `@react-native-community/netinfo`; client search cache for offline browsing; background upload sync service with auto-retry on connectivity restore; `OfflineBanner` component on home/client screens; "Fila de Envio" tab in galeria with retry/remove per doc; queue badge on gallery icon
 
 ---
 

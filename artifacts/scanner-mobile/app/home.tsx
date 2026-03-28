@@ -15,9 +15,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { OfflineBanner } from "@/components/OfflineBanner";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
+import { useScanQueue } from "@/contexts/ScanQueue";
 import { apiGet } from "@/config/api";
+import { useNetworkStatus } from "@/lib/network";
+import { cacheClients, searchCachedClients } from "@/lib/client-cache";
 import { registrarConsulta } from "@/lib/audit-service";
 
 interface PromarcosPessoa {
@@ -40,13 +44,17 @@ function initials(name: string) {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
+  const { isOnline } = useNetworkStatus();
+  const { pendingCount, failedCount } = useScanQueue();
   const [termo, setTermo] = useState("");
   const [results, setResults] = useState<PromarcosPessoa[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [isOfflineResult, setIsOfflineResult] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const queueBadge = pendingCount + failedCount;
 
   async function handleSearch() {
     const t = termo.trim();
@@ -56,17 +64,38 @@ export default function HomeScreen() {
     }
     setLoading(true);
     setSearched(false);
+    setIsOfflineResult(false);
     if (user) {
       registrarConsulta({ email: user.email, codigo: user.codigo }, t);
     }
+
+    if (!isOnline) {
+      const cached = await searchCachedClients(t);
+      setResults(cached.map((c) => ({ codigo: c.codigo, nomecompleto: c.nomecompleto, cpf: c.cpf, nome: c.nome })));
+      setSearched(true);
+      setIsOfflineResult(true);
+      setLoading(false);
+      return;
+    }
+
     try {
       const data = await apiGet<PromarcosPessoa[]>(
         `/promarcos/buscarsocio/${encodeURIComponent(t)}`
       );
-      setResults(Array.isArray(data) ? data : []);
+      const arr = Array.isArray(data) ? data : [];
+      setResults(arr);
       setSearched(true);
+      if (arr.length > 0) {
+        cacheClients(arr);
+      }
     } catch {
-      setResults([]);
+      const cached = await searchCachedClients(t);
+      if (cached.length > 0) {
+        setResults(cached.map((c) => ({ codigo: c.codigo, nomecompleto: c.nomecompleto, cpf: c.cpf, nome: c.nome })));
+        setIsOfflineResult(true);
+      } else {
+        setResults([]);
+      }
       setSearched(true);
     } finally {
       setLoading(false);
@@ -102,7 +131,8 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
-      {/* Header */}
+      <OfflineBanner />
+
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Olá, {user?.nome?.split(" ")[0] ?? "Colaborador"}</Text>
@@ -115,6 +145,11 @@ export default function HomeScreen() {
             hitSlop={8}
           >
             <Feather name="folder" size={18} color={Colors.primary} />
+            {queueBadge > 0 && (
+              <View style={styles.queueBadge}>
+                <Text style={styles.queueBadgeText}>{queueBadge > 99 ? "99+" : queueBadge}</Text>
+              </View>
+            )}
           </Pressable>
           <Pressable onPress={handleLogout} style={styles.avatarBtn} hitSlop={8}>
             <View style={styles.avatar}>
@@ -124,14 +159,13 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Search bar */}
       <View style={styles.searchBox}>
         <Feather name="search" size={20} color={Colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           value={termo}
           onChangeText={setTermo}
-          placeholder="Nome ou CPF do cliente..."
+          placeholder={isOnline ? "Nome ou CPF do cliente..." : "Buscar no cache local..."}
           placeholderTextColor={Colors.textMuted}
           returnKeyType="search"
           onSubmitEditing={handleSearch}
@@ -139,7 +173,7 @@ export default function HomeScreen() {
           testID="search-input"
         />
         {termo.length > 0 && (
-          <Pressable onPress={() => { setTermo(""); setResults([]); setSearched(false); }} hitSlop={8}>
+          <Pressable onPress={() => { setTermo(""); setResults([]); setSearched(false); setIsOfflineResult(false); }} hitSlop={8}>
             <Feather name="x" size={18} color={Colors.textMuted} />
           </Pressable>
         )}
@@ -157,7 +191,13 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {/* Results */}
+      {isOfflineResult && searched && results.length > 0 && (
+        <View style={styles.offlineResultHint}>
+          <Feather name="database" size={13} color="#92400E" />
+          <Text style={styles.offlineResultText}>Resultados do cache local (offline)</Text>
+        </View>
+      )}
+
       <FlatList
         data={results}
         keyExtractor={(item) => String(item.codigo)}
@@ -172,7 +212,9 @@ export default function HomeScreen() {
             <View style={styles.emptyState}>
               <Feather name="users" size={48} color={Colors.border} />
               <Text style={styles.emptyTitle}>Nenhum cliente encontrado</Text>
-              <Text style={styles.emptyText}>Tente outro nome ou CPF</Text>
+              <Text style={styles.emptyText}>
+                {isOnline ? "Tente outro nome ou CPF" : "Sem resultado no cache local. Conecte-se para buscar online."}
+              </Text>
             </View>
           ) : !searched ? (
             <View style={styles.emptyState}>
@@ -244,6 +286,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1.5,
     borderColor: Colors.border,
+    position: "relative",
+  },
+  queueBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  queueBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
   },
   searchBox: {
     flexDirection: "row",
@@ -277,6 +337,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
+  },
+  offlineResultHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#FFFBEB",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  offlineResultText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: "#92400E",
   },
   listContent: { paddingHorizontal: 20, paddingTop: 4, flexGrow: 1 },
   clientCard: {

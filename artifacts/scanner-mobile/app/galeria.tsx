@@ -1,23 +1,29 @@
 import { Feather } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system/build/legacy/FileSystem";
+import * as FileSystem from "expo-file-system/src/legacy/FileSystem";
+import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Sharing from "expo-sharing";
 import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Platform,
   Pressable,
   RefreshControl,
+  SectionList,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { OfflineBanner } from "@/components/OfflineBanner";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
+import { QueuedDoc, useScanQueue } from "@/contexts/ScanQueue";
+import { useNetworkStatus } from "@/lib/network";
+import { triggerSync } from "@/lib/upload-sync";
 
 const BASE_DIR = FileSystem.documentDirectory + "MendesAdvocacia/";
 
@@ -47,6 +53,19 @@ function formatDate(ts?: number) {
   });
 }
 
+function formatIsoDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
 function fileIcon(name: string) {
   const lower = name.toLowerCase();
   if (lower.endsWith(".pdf")) return "file-text";
@@ -61,18 +80,40 @@ function fileColor(name: string) {
   return Colors.textSecondary;
 }
 
+function statusLabel(status: string) {
+  switch (status) {
+    case "pending": return "Aguardando";
+    case "syncing": return "Enviando...";
+    case "failed": return "Falhou";
+    default: return status;
+  }
+}
+
+function statusColor(status: string) {
+  switch (status) {
+    case "pending": return "#D97706";
+    case "syncing": return "#2563EB";
+    case "failed": return "#DC2626";
+    default: return Colors.textSecondary;
+  }
+}
+
 export default function GaleriaScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ dir?: string; titulo?: string }>();
-
   const currentDir = params.dir ?? BASE_DIR;
-  const titulo = params.titulo ?? "Documentos Escaneados";
+  const titulo = params.titulo ?? "Documentos";
   const isRoot = currentDir === BASE_DIR;
 
   const { logout } = useAuth();
+  const { isOnline } = useNetworkStatus();
+  const { queue, removeFromQueue, markForRetry, clearAll } = useScanQueue();
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"files" | "queue">(isRoot ? "queue" : "files");
+
+  const pendingQueue = queue.filter((d) => d.uploadStatus !== "synced");
 
   const loadDir = useCallback(async () => {
     try {
@@ -96,7 +137,6 @@ export default function GaleriaScreen() {
           } as DirEntry;
         })
       );
-      // Sort: folders first, then files by date desc
       detailed.sort((a, b) => {
         if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
         return (b.modificationTime ?? 0) - (a.modificationTime ?? 0);
@@ -112,7 +152,10 @@ export default function GaleriaScreen() {
 
   useEffect(() => { loadDir(); }, [loadDir]);
 
-  function handleRefresh() { setRefreshing(true); loadDir(); }
+  function handleRefresh() {
+    setRefreshing(true);
+    loadDir();
+  }
 
   async function handleLogout() {
     Alert.alert("Sair", "Deseja encerrar a sessão?", [
@@ -147,7 +190,7 @@ export default function GaleriaScreen() {
         return;
       }
       await Sharing.shareAsync(entry.uri, { dialogTitle: entry.name });
-    } catch (e) {
+    } catch {
       Alert.alert("Erro", "Não foi possível compartilhar o arquivo.");
     }
   }
@@ -174,11 +217,62 @@ export default function GaleriaScreen() {
     );
   }
 
+  function handleRetryDoc(doc: QueuedDoc) {
+    markForRetry(doc.id);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isOnline) {
+      triggerSync();
+    }
+  }
+
+  function handleRemoveQueueDoc(doc: QueuedDoc) {
+    Alert.alert(
+      "Remover da fila",
+      `Remover "${doc.categoriaNome}" de ${doc.clienteNome}?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: () => {
+            removeFromQueue(doc.id);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          },
+        },
+      ]
+    );
+  }
+
+  function handleClearQueue() {
+    Alert.alert(
+      "Limpar fila",
+      "Remover todos os documentos pendentes da fila de envio?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Limpar tudo",
+          style: "destructive",
+          onPress: () => clearAll(),
+        },
+      ]
+    );
+  }
+
+  function handleSyncNow() {
+    if (!isOnline) {
+      Alert.alert("Sem conexão", "Conecte-se à internet para enviar documentos.");
+      return;
+    }
+    triggerSync();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
-      {/* Header */}
+      <OfflineBanner />
+
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <Feather name="arrow-left" size={22} color={Colors.text} />
@@ -186,7 +280,11 @@ export default function GaleriaScreen() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>{titulo}</Text>
           <Text style={styles.headerSub}>
-            {isRoot ? "Documentos salvos por cliente" : `${entries.length} item${entries.length !== 1 ? "s" : ""}`}
+            {isRoot
+              ? activeTab === "queue"
+                ? `${pendingQueue.length} na fila de envio`
+                : `${entries.length} pasta${entries.length !== 1 ? "s" : ""}`
+              : `${entries.length} item${entries.length !== 1 ? "s" : ""}`}
           </Text>
         </View>
         <View style={{ flexDirection: "row", gap: 6 }}>
@@ -210,46 +308,166 @@ export default function GaleriaScreen() {
         </View>
       </View>
 
-      {/* List */}
-      <FlatList
-        data={entries}
-        keyExtractor={(item) => item.uri}
-        numColumns={isRoot ? 2 : 1}
-        key={isRoot ? "grid" : "list"}
-        contentContainerStyle={[
-          isRoot ? styles.gridContent : styles.listContent,
-          { paddingBottom: insets.bottom + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Colors.primary]} />}
-        ListEmptyComponent={
-          !loading ? (
-            <View style={styles.emptyState}>
-              <Feather name="folder-minus" size={52} color={Colors.border} />
-              <Text style={styles.emptyTitle}>
-                {isRoot ? "Nenhum documento salvo" : "Pasta vazia"}
-              </Text>
-              <Text style={styles.emptyText}>
-                {isRoot
-                  ? "Os documentos escaneados e salvos localmente aparecerão aqui"
-                  : "Nenhum arquivo encontrado nesta pasta"}
-              </Text>
+      {isRoot && (
+        <View style={styles.tabRow}>
+          <Pressable
+            style={[styles.tabBtn, activeTab === "queue" && styles.tabBtnActive]}
+            onPress={() => setActiveTab("queue")}
+          >
+            <Feather name="upload-cloud" size={16} color={activeTab === "queue" ? Colors.primary : Colors.textMuted} />
+            <Text style={[styles.tabText, activeTab === "queue" && styles.tabTextActive]}>
+              Fila de Envio
+            </Text>
+            {pendingQueue.length > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>{pendingQueue.length}</Text>
+              </View>
+            )}
+          </Pressable>
+          <Pressable
+            style={[styles.tabBtn, activeTab === "files" && styles.tabBtnActive]}
+            onPress={() => setActiveTab("files")}
+          >
+            <Feather name="folder" size={16} color={activeTab === "files" ? Colors.primary : Colors.textMuted} />
+            <Text style={[styles.tabText, activeTab === "files" && styles.tabTextActive]}>
+              Salvos no Dispositivo
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {(isRoot && activeTab === "queue") ? (
+        <View style={{ flex: 1 }}>
+          {pendingQueue.length > 0 && (
+            <View style={styles.queueActions}>
+              <Pressable style={styles.syncNowBtn} onPress={handleSyncNow}>
+                <Feather name="upload-cloud" size={16} color="#fff" />
+                <Text style={styles.syncNowText}>Enviar agora</Text>
+              </Pressable>
+              <Pressable style={styles.clearQueueBtn} onPress={handleClearQueue}>
+                <Feather name="trash-2" size={16} color="#E53E3E" />
+              </Pressable>
             </View>
-          ) : null
-        }
-        renderItem={({ item }) =>
-          isRoot ? (
-            <FolderCard entry={item} onOpen={openEntry} onDelete={handleDelete} />
-          ) : (
-            <FileRow entry={item} onOpen={openEntry} onShare={handleShare} onDelete={handleDelete} />
-          )
-        }
-      />
+          )}
+
+          <FlatList
+            data={pendingQueue}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24, flexGrow: 1 }]}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Feather name="check-circle" size={52} color={Colors.border} />
+                <Text style={styles.emptyTitle}>Fila vazia</Text>
+                <Text style={styles.emptyText}>
+                  Todos os documentos foram enviados com sucesso
+                </Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <QueueDocRow
+                doc={item}
+                onRetry={() => handleRetryDoc(item)}
+                onRemove={() => handleRemoveQueueDoc(item)}
+              />
+            )}
+          />
+        </View>
+      ) : (
+        <FlatList
+          data={entries}
+          keyExtractor={(item) => item.uri}
+          numColumns={isRoot ? 2 : 1}
+          key={isRoot ? "grid" : "list"}
+          contentContainerStyle={[
+            isRoot ? styles.gridContent : styles.listContent,
+            { paddingBottom: insets.bottom + 24 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Colors.primary]} />}
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.emptyState}>
+                <Feather name="folder-minus" size={52} color={Colors.border} />
+                <Text style={styles.emptyTitle}>
+                  {isRoot ? "Nenhum documento salvo" : "Pasta vazia"}
+                </Text>
+                <Text style={styles.emptyText}>
+                  {isRoot
+                    ? "Os documentos escaneados e salvos localmente aparecerão aqui"
+                    : "Nenhum arquivo encontrado nesta pasta"}
+                </Text>
+              </View>
+            ) : null
+          }
+          renderItem={({ item }) =>
+            isRoot ? (
+              <FolderCard entry={item} onOpen={openEntry} onDelete={handleDelete} />
+            ) : (
+              <FileRow entry={item} onOpen={openEntry} onShare={handleShare} onDelete={handleDelete} />
+            )
+          }
+        />
+      )}
     </View>
   );
 }
 
-// ── Folder card (grid layout for root) ──────────────────────────────
+function QueueDocRow({
+  doc,
+  onRetry,
+  onRemove,
+}: {
+  doc: QueuedDoc;
+  onRetry: () => void;
+  onRemove: () => void;
+}) {
+  const isFailed = doc.uploadStatus === "failed";
+  const isSyncing = doc.uploadStatus === "syncing";
+
+  return (
+    <View style={styles.queueRow}>
+      <View style={[styles.queueIconWrap, { backgroundColor: statusColor(doc.uploadStatus) + "18" }]}>
+        {isSyncing ? (
+          <ActivityIndicator size="small" color={statusColor(doc.uploadStatus)} />
+        ) : (
+          <Feather
+            name={isFailed ? "alert-circle" : "clock"}
+            size={22}
+            color={statusColor(doc.uploadStatus)}
+          />
+        )}
+      </View>
+      <View style={styles.queueInfo}>
+        <Text style={styles.queueDocName} numberOfLines={1}>{doc.categoriaNome}</Text>
+        <Text style={styles.queueClientName} numberOfLines={1}>{doc.clienteNome}</Text>
+        <View style={styles.queueMeta}>
+          <Text style={[styles.queueStatus, { color: statusColor(doc.uploadStatus) }]}>
+            {statusLabel(doc.uploadStatus)}
+          </Text>
+          <Text style={styles.queueDate}>{formatIsoDate(doc.addedAt)}</Text>
+          {doc.pages.length > 0 && (
+            <Text style={styles.queuePages}>{doc.pages.length} pg</Text>
+          )}
+        </View>
+        {isFailed && doc.lastError && (
+          <Text style={styles.queueError} numberOfLines={2}>{doc.lastError}</Text>
+        )}
+      </View>
+      <View style={styles.queueActions2}>
+        {isFailed && (
+          <Pressable onPress={onRetry} style={styles.retryBtn} hitSlop={8}>
+            <Feather name="refresh-cw" size={17} color="#2563EB" />
+          </Pressable>
+        )}
+        <Pressable onPress={onRemove} style={styles.removeBtn} hitSlop={8}>
+          <Feather name="x" size={17} color="#E53E3E" />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function FolderCard({
   entry,
   onOpen,
@@ -274,7 +492,6 @@ function FolderCard({
   );
 }
 
-// ── File row (list layout for subdir) ───────────────────────────────
 function FileRow({
   entry,
   onOpen,
@@ -325,7 +542,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 12,
     paddingTop: 8,
     gap: 10,
   },
@@ -351,10 +568,167 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  tabRow: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.card,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  tabBtnActive: {
+    backgroundColor: Colors.accentLight,
+  },
+  tabText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textMuted,
+  },
+  tabTextActive: {
+    color: Colors.primary,
+    fontFamily: "Inter_600SemiBold",
+  },
+  tabBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  tabBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+  },
+
+  queueActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    gap: 8,
+  },
+  syncNowBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  syncNowText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  clearQueueBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#FFF5F5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  queueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 2,
+    gap: 12,
+  },
+  queueIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  queueInfo: { flex: 1 },
+  queueDocName: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  queueClientName: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  queueMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  queueStatus: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+  },
+  queueDate: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
+  queuePages: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
+  queueError: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: "#DC2626",
+    marginTop: 4,
+    lineHeight: 14,
+  },
+  queueActions2: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  retryBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#FFF5F5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   gridContent: { paddingHorizontal: 16, paddingTop: 4 },
   listContent: { paddingHorizontal: 16, paddingTop: 4 },
 
-  // Folder grid card
   folderCard: {
     flex: 1,
     margin: 6,
@@ -392,7 +766,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // File list row
   fileRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -14,9 +14,12 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { SyncWatcher } from "@/components/SyncWatcher";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ScanQueueProvider } from "@/contexts/ScanQueue";
+import { NetworkProvider } from "@/lib/network";
 import { startAuditSync } from "@/lib/audit-sync";
+import { startAutoSync } from "@/lib/upload-sync";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -60,6 +63,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     startAuditSync();
+    startAutoSync();
   }, []);
 
   if (!fontsLoaded && !fontError) return null;
@@ -68,15 +72,18 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <ScanQueueProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
-                  <RootLayoutNav />
-                </KeyboardProvider>
-              </GestureHandlerRootView>
-            </ScanQueueProvider>
-          </AuthProvider>
+          <NetworkProvider>
+            <AuthProvider>
+              <ScanQueueProvider>
+                <SyncWatcher />
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                  <KeyboardProvider>
+                    <RootLayoutNav />
+                  </KeyboardProvider>
+                </GestureHandlerRootView>
+              </ScanQueueProvider>
+            </AuthProvider>
+          </NetworkProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

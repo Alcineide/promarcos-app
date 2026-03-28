@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import { readAsStringAsync, documentDirectory, makeDirectoryAsync, copyAsync, getInfoAsync } from "expo-file-system/build/legacy/FileSystem";
-import { EncodingType } from "expo-file-system/build/legacy/FileSystem.types";
+import * as FileSystem from "expo-file-system/src/legacy/FileSystem";
+import { EncodingType } from "expo-file-system/src/legacy/FileSystem.types";
 import * as Haptics from "expo-haptics";
 import * as MediaLibrary from "expo-media-library";
 import * as Print from "expo-print";
@@ -18,11 +18,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { apiPost } from "@/config/api";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { QueuedDoc, useScanQueue } from "@/contexts/ScanQueue";
+import { useNetworkStatus } from "@/lib/network";
 import { registrarUpload } from "@/lib/audit-service";
+import { acquireSyncLock, releaseSyncLock, triggerSync } from "@/lib/upload-sync";
 
 const CATEGORIAS = [
   { id: "folha-rosto", label: "Folha de Rosto", icon: "file-text", color: "#6366F1" },
@@ -50,7 +53,7 @@ function initials(name: string) {
 async function buildPdfForDoc(doc: QueuedDoc): Promise<{ uri: string; fileName: string }> {
   const base64Images = await Promise.all(
     doc.pages.map(async (page) => {
-      const b64 = await readAsStringAsync(page.uri, { encoding: EncodingType.Base64 });
+      const b64 = await FileSystem.readAsStringAsync(page.uri, { encoding: EncodingType.Base64 });
       const ext = page.uri.split(".").pop()?.toLowerCase() ?? "jpg";
       const mime = ext === "png" ? "image/png" : "image/jpeg";
       return { b64, mime };
@@ -84,22 +87,22 @@ async function saveToDevice(pdfUri: string, pdfFileName: string, clienteNome: st
     .substring(0, 60);
 
   // 1. Always save to private app storage (accessible via Galeria screen)
-  const internalFolder = `${documentDirectory}MendesAdvocacia/${safeName}/`;
+  const internalFolder = `${FileSystem.documentDirectory}MendesAdvocacia/${safeName}/`;
   try {
-    await makeDirectoryAsync(internalFolder, { intermediates: true });
+    await FileSystem.makeDirectoryAsync(internalFolder, { intermediates: true });
     const dest = internalFolder + pdfFileName;
-    const info = await getInfoAsync(dest);
-    if (!info.exists) await copyAsync({ from: pdfUri, to: dest });
+    const info = await FileSystem.getInfoAsync(dest);
+    if (!info.exists) await FileSystem.copyAsync({ from: pdfUri, to: dest });
   } catch { /* non-critical */ }
 
   // 2. Android: try to copy directly to the Downloads/MendesAdvocacia folder
   if (Platform.OS === "android") {
     try {
       const downloadsFolder = `/storage/emulated/0/Download/MendesAdvocacia/${safeName}/`;
-      await makeDirectoryAsync(downloadsFolder, { intermediates: true });
+      await FileSystem.makeDirectoryAsync(downloadsFolder, { intermediates: true });
       const dest = downloadsFolder + pdfFileName;
-      const info = await getInfoAsync(dest);
-      if (!info.exists) await copyAsync({ from: pdfUri, to: dest });
+      const info = await FileSystem.getInfoAsync(dest);
+      if (!info.exists) await FileSystem.copyAsync({ from: pdfUri, to: dest });
     } catch {
       // Fallback: try via MediaLibrary (works on older Android versions)
       try {
@@ -118,7 +121,8 @@ export default function ClienteScreen() {
   const { id, nome, cpf } = params;
 
   const { user, logout } = useAuth();
-  const { queue, removeFromQueue, clearClientQueue } = useScanQueue();
+  const { isOnline } = useNetworkStatus();
+  const { queue, removeFromQueue, clearClientQueue, updateDocStatus } = useScanQueue();
   const clientQueue = queue.filter((d) => d.clienteId === id);
   const totalPages = clientQueue.reduce((acc, d) => acc + d.pages.length, 0);
 
@@ -135,7 +139,7 @@ export default function ClienteScreen() {
     .replace(/[^\w\s]/g, "")
     .trim()
     .substring(0, 60);
-  const clienteDir = `${documentDirectory}MendesAdvocacia/${clienteSafeName}/`;
+  const clienteDir = `${FileSystem.documentDirectory}MendesAdvocacia/${clienteSafeName}/`;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   async function handleLogout() {
@@ -168,43 +172,64 @@ export default function ClienteScreen() {
 
   async function handleEnviarTodos() {
     if (clientQueue.length === 0) return;
+
+    if (!isOnline) {
+      Alert.alert(
+        "Sem conexão",
+        "Os documentos foram salvos na fila e serão enviados automaticamente quando a internet voltar.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    if (!acquireSyncLock()) {
+      Alert.alert("Envio em andamento", "Aguarde o envio atual terminar.");
+      return;
+    }
+
     setSending(true);
     setShowSuccess(false);
     setDoneCount(0);
 
     let successCount = 0;
-    for (let i = 0; i < clientQueue.length; i++) {
-      const doc = clientQueue[i];
-      setProgress({ current: i + 1, total: clientQueue.length });
-      try {
-        const { uri: pdfUri, fileName: pdfFileName } = await buildPdfForDoc(doc);
+    const pending = clientQueue.filter((d) => d.uploadStatus === "pending" || d.uploadStatus === "failed");
+    try {
+      for (let i = 0; i < pending.length; i++) {
+        const doc = pending[i];
+        setProgress({ current: i + 1, total: pending.length });
+        updateDocStatus(doc.id, "syncing");
+        try {
+          const { uri: pdfUri, fileName: pdfFileName } = await buildPdfForDoc(doc);
 
-        const pdfBase64 = await readAsStringAsync(pdfUri, { encoding: EncodingType.Base64 });
+          const pdfBase64 = await FileSystem.readAsStringAsync(pdfUri, { encoding: EncodingType.Base64 });
 
-        const nomeCliente = (doc.clienteNome ?? "").trim() || "Cliente";
-        await apiPost("/promarcos/arquivo", {
-          pessoaCodigo: parseInt(doc.clienteId, 10),
-          fileName: pdfFileName,
-          fileBase64: pdfBase64,
-          tipo: doc.categoriaNome,
-          nome: `${doc.categoriaNome} - ${nomeCliente}`,
-          mimeType: "application/pdf",
-        });
+          const nomeCliente = (doc.clienteNome ?? "").trim() || "Cliente";
+          await apiPost("/promarcos/arquivo", {
+            pessoaCodigo: parseInt(doc.clienteId, 10),
+            fileName: pdfFileName,
+            fileBase64: pdfBase64,
+            tipo: doc.categoriaNome,
+            nome: `${doc.categoriaNome} - ${nomeCliente}`,
+            mimeType: "application/pdf",
+          });
 
-        await saveToDevice(pdfUri, pdfFileName, doc.clienteNome);
-        if (user) {
-          registrarUpload(
-            { email: user.email, codigo: user.codigo },
-            doc.clienteNome,
-            doc.categoriaNome
-          );
+          await saveToDevice(pdfUri, pdfFileName, doc.clienteNome);
+          if (user) {
+            registrarUpload(
+              { email: user.email, codigo: user.codigo },
+              doc.clienteNome,
+              doc.categoriaNome
+            );
+          }
+          updateDocStatus(doc.id, "synced");
+          successCount++;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Erro desconhecido";
+          updateDocStatus(doc.id, "failed", msg);
         }
-        removeFromQueue(doc.id);
-        successCount++;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Erro desconhecido";
-        Alert.alert(`Erro ao enviar "${doc.categoriaNome}"`, msg, [{ text: "OK" }]);
       }
+    } finally {
+      releaseSyncLock();
     }
 
     setSending(false);
@@ -214,6 +239,14 @@ export default function ClienteScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 4000);
+    }
+    if (successCount < pending.length) {
+      const failCount = pending.length - successCount;
+      Alert.alert(
+        "Envio parcial",
+        `${successCount} enviado(s), ${failCount} com falha. Os que falharam serão reenviados automaticamente.`,
+        [{ text: "OK" }]
+      );
     }
   }
 
@@ -237,6 +270,7 @@ export default function ClienteScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
+      <OfflineBanner />
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
