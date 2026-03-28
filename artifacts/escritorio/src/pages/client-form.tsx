@@ -1296,8 +1296,10 @@ export default function ClientForm() {
                     {promarcosCodigo && (
                       <button
                         type="button"
+                        disabled={!isOnline}
                         onClick={() => fetchPromarkosProcessos(promarcosCodigo)}
-                        className="px-3 py-2 border border-border rounded-xl text-sm font-medium hover:bg-muted transition-colors flex items-center gap-1.5"
+                        title={!isOnline ? "Requer internet" : undefined}
+                        className="px-3 py-2 border border-border rounded-xl text-sm font-medium hover:bg-muted transition-colors flex items-center gap-1.5 disabled:opacity-50"
                       >
                         <RefreshCw className="w-3.5 h-3.5" /> Atualizar
                       </button>
@@ -1305,8 +1307,10 @@ export default function ClientForm() {
                     {promarcosCodigo && (
                       <button
                         type="button"
+                        disabled={!isOnline}
                         onClick={() => openPromarkosProcessoModal()}
-                        className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-lg shadow-primary/20 text-sm"
+                        title={!isOnline ? "Requer internet" : undefined}
+                        className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2 shadow-lg shadow-primary/20 text-sm disabled:opacity-50"
                       >
                         + Novo Processo
                       </button>
@@ -1327,7 +1331,7 @@ export default function ClientForm() {
                   <div className="p-8 text-center">
                     <Briefcase className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
                     <p className="text-sm text-muted-foreground font-medium">Nenhum processo encontrado no Promarcos para este cliente.</p>
-                    <button type="button" onClick={() => openPromarkosProcessoModal()} className="mt-4 px-5 py-2 bg-primary/10 text-primary font-semibold rounded-xl hover:bg-primary/20 transition-colors text-sm">
+                    <button type="button" disabled={!isOnline} onClick={() => openPromarkosProcessoModal()} title={!isOnline ? "Requer internet" : undefined} className="mt-4 px-5 py-2 bg-primary/10 text-primary font-semibold rounded-xl hover:bg-primary/20 transition-colors text-sm disabled:opacity-50">
                       + Novo Processo no Promarcos
                     </button>
                   </div>
@@ -1419,8 +1423,9 @@ export default function ClientForm() {
                     <button
                       type="button"
                       key={doc}
-                      disabled={!!generatingDoc}
+                      disabled={!!generatingDoc || !isOnline}
                       onClick={() => generateDoc(doc)}
+                      title={!isOnline ? "Requer internet" : undefined}
                       className="px-4 py-2 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
                     >
                       {generatingDoc === doc ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus2 className="w-4 h-4" />}
@@ -1429,8 +1434,9 @@ export default function ClientForm() {
                   ))}
                   <button
                     type="button"
-                    disabled={!!generatingDoc}
+                    disabled={!!generatingDoc || !isOnline}
                     onClick={() => generateDoc("Gerar Todos")}
+                    title={!isOnline ? "Requer internet" : undefined}
                     className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors text-sm font-bold flex items-center gap-2 disabled:opacity-50"
                   >
                     {generatingDoc === "Gerar Todos" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus2 className="w-4 h-4" />}
@@ -1450,14 +1456,15 @@ export default function ClientForm() {
                         <div className="flex justify-between items-center mb-4">
                           <div className="flex items-center gap-3">
                             <span className="text-orange-600 font-bold text-sm">{pendentes.length} documento{pendentes.length > 1 ? "s" : ""} pendente{pendentes.length > 1 ? "s" : ""} de assinatura</span>
-                            <button type="button" onClick={handleRefreshStatus} disabled={loadingZapDocs} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors" title="Atualizar status">
+                            <button type="button" onClick={handleRefreshStatus} disabled={loadingZapDocs || !isOnline} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors" title={!isOnline ? "Requer internet" : "Atualizar status"}>
                               <RefreshCw className={cn("w-4 h-4", loadingZapDocs && "animate-spin")} />
                             </button>
                           </div>
                           <button
                             type="button"
-                            disabled={signingAll}
+                            disabled={signingAll || !isOnline}
                             onClick={handleAssinarTodos}
+                            title={!isOnline ? "Requer internet" : undefined}
                             className="px-4 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors text-sm flex items-center gap-2 disabled:opacity-50"
                           >
                             {signingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
@@ -1478,11 +1485,11 @@ export default function ClientForm() {
                                 <button type="button" onClick={() => handleDownloadOriginal(doc)} className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors" title="Baixar">
                                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                                 </button>
-                                <button type="button" onClick={() => handleAssinar(doc)} className="p-2 text-orange-600 hover:text-orange-700 hover:bg-orange-100 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold" title="Assinar">
+                                <button type="button" disabled={!isOnline} onClick={() => handleAssinar(doc)} className="p-2 text-orange-600 hover:text-orange-700 hover:bg-orange-100 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold disabled:opacity-50" title={!isOnline ? "Requer internet" : "Assinar"}>
                                   <ExternalLink className="w-4 h-4" />
                                   <span>Assinar</span>
                                 </button>
-                                <button type="button" onClick={() => handleDeleteZapDoc(doc.id)} className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-auto" title="Excluir">
+                                <button type="button" disabled={!isOnline} onClick={() => handleDeleteZapDoc(doc.id)} className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-auto disabled:opacity-50" title={!isOnline ? "Requer internet" : "Excluir"}>
                                   <Trash2 className="w-4 h-4" />
                                 </button>
                               </div>
@@ -1515,7 +1522,7 @@ export default function ClientForm() {
                                 <button type="button" onClick={() => handleDownloadOriginal(doc)} className="p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors" title="Baixar original">
                                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                 </button>
-                                <button type="button" onClick={() => handleDeleteZapDoc(doc.id)} className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-auto" title="Excluir">
+                                <button type="button" disabled={!isOnline} onClick={() => handleDeleteZapDoc(doc.id)} className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-auto disabled:opacity-50" title={!isOnline ? "Requer internet" : "Excluir"}>
                                   <Trash2 className="w-4 h-4" />
                                 </button>
                               </div>
@@ -1542,7 +1549,7 @@ export default function ClientForm() {
                 
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-8">
                   {["Folha de rosto", "Procuração", "Docs Pessoais", "Residência", "Fato gerador", "Cert. Casamento", "Cert. Óbito", "Provas rurais", "Laudo médico", "Outros"].map(tipo => (
-                    <button type="button" key={tipo} onClick={() => handleFileUpload(tipo)} className="p-4 rounded-xl border border-amber-500/20 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-500/40 transition-all font-semibold flex flex-col items-center justify-center gap-2 text-center h-24">
+                    <button type="button" key={tipo} disabled={!isOnline} onClick={() => handleFileUpload(tipo)} title={!isOnline ? "Requer internet" : undefined} className="p-4 rounded-xl border border-amber-500/20 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-500/40 transition-all font-semibold flex flex-col items-center justify-center gap-2 text-center h-24 disabled:opacity-50">
                       <DownloadCloud className="w-5 h-5" />
                       <span className="text-xs leading-tight">{tipo}</span>
                     </button>

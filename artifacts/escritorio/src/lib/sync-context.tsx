@@ -38,7 +38,7 @@ export function SyncQueueProvider({ children }: { children: ReactNode }) {
     await updateSubmissionStatus(submission.id, "syncing");
 
     try {
-      const res = await fetch("/api/clientes", {
+      const res = await fetch("/api/clientes/offline-sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submission.formData),

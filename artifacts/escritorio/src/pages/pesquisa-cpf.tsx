@@ -235,10 +235,11 @@ export default function PesquisaCpf() {
 
                 <button
                   onClick={handlePesquisar}
-                  disabled={pesquisando || !cpf.trim()}
+                  disabled={pesquisando || !cpf.trim() || !isOnline}
+                  title={!isOnline ? "Requer internet" : undefined}
                   className="w-full bg-[#3a7abd] hover:bg-[#2d6aaa] disabled:bg-[#3a7abd]/50 disabled:cursor-not-allowed text-white font-bold text-sm py-2 px-3 rounded-lg transition-colors duration-200 shadow-sm"
                 >
-                  {pesquisando ? "Pesquisando..." : "Pesquisar CPF"}
+                  {!isOnline ? "Requer internet" : pesquisando ? "Pesquisando..." : "Pesquisar CPF"}
                 </button>
 
                 {pesquisando && fonteAtual && (

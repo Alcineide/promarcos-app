@@ -212,6 +212,75 @@ async function fetchWithTimeout(url: string, timeoutMs = 30000): Promise<Respons
   }
 }
 
+router.post("/clientes/offline-sync", async (req, res) => {
+  try {
+    const formData = req.body;
+
+    let nascimentoISO: string | null = null;
+    if (formData.dataNascimento) {
+      const parts = formData.dataNascimento.split("/");
+      if (parts.length === 3) {
+        nascimentoISO = `${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`;
+      } else if (formData.dataNascimento.includes("-")) {
+        nascimentoISO = formData.dataNascimento;
+      }
+    }
+
+    const promarkosPayload = {
+      Pessoa: {
+        razao_social: formData.nomeCompleto || "",
+        cpf: formData.cpf || "",
+        rg: formData.rgRepresentante || "",
+        orgaoemissor: formData.orgaoEmissor || "",
+        estado_civil: formData.estadoCivil || "",
+        nascimento: nascimentoISO,
+        sexo: formData.sexo === "Masculino" ? "M" : formData.sexo === "Feminino" ? "F" : formData.sexo || "",
+        cep: (formData.cep || "").replace(/\D/g, ""),
+        bairro: formData.bairro || "",
+        logradouro: formData.logradouro || "",
+        numero: formData.numero || "",
+        complemento: formData.complemento || "",
+        estadoId: null,
+        cidadeId: null,
+        email1: formData.email || "",
+        telefone1: formData.telefone || "",
+        telefone2: formData.telefone2 || "",
+        profissao: formData.profissao || "",
+        observacoes: formData.observacao || "",
+        ativo: true,
+        codempresa: 1,
+      },
+      Processos: [],
+    };
+
+    try {
+      const upstream = await fetch(`${PROMARCOS_BASE}/pessoas/salvarpessoacompleta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(promarkosPayload),
+      });
+      const promarcosResult = (await upstream.json()) as { sucesso?: boolean; codigo?: number; mensagem?: string };
+      if (promarcosResult.codigo) {
+        formData.promarcosCodigo = promarcosResult.codigo;
+      }
+      req.log.info({ promarcosResult }, "Promarcos offline-sync result");
+    } catch (promarcosErr) {
+      req.log.warn({ err: promarcosErr }, "Promarcos sync failed during offline replay, continuing with local save");
+    }
+
+    const body = CreateClienteBody.parse(formData);
+    const [cliente] = await db.insert(clientesTable).values(body).returning();
+    res.status(201).json({
+      ...cliente,
+      createdAt: cliente.createdAt.toISOString(),
+      updatedAt: cliente.updatedAt.toISOString(),
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(400).json({ error: "Dados inválidos" });
+  }
+});
+
 router.get("/pesquisa-cpf/local/:cpf", async (req, res) => {
   try {
     const cpfRaw = req.params.cpf.replace(/\D/g, "");

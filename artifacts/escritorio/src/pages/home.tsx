@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "wouter";
 import { Search, UserPlus, ChevronRight, FileText, Briefcase, MapPin, AlertCircle, WifiOff } from "lucide-react";
-import { useListClientes } from "@workspace/api-client-react";
+import { useListClientes, type ListClientesQueryResult } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout";
 import { motion } from "framer-motion";
 import { formatCPF } from "@/lib/utils";
@@ -10,12 +10,14 @@ import { cn } from "@/lib/utils";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { cacheSearchResults, getCachedSearchResults } from "@/lib/offline-db";
 
+type ClienteListItem = ListClientesQueryResult[number];
+
 export default function Home() {
   const isOnline = useOnlineStatus();
   const [searchTerm, setSearchTerm] = useState("");
   const [promarkosResult, setPromarkosResult] = useState<{ existe: boolean; pessoa?: PromarkosPessoa } | null>(null);
   const [promarkosLoading, setPromarkosLoading] = useState(false);
-  const [cachedClients, setCachedClients] = useState<unknown[] | null>(null);
+  const [cachedClients, setCachedClients] = useState<ClienteListItem[] | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const { data: clients, isLoading } = useListClientes({ search: searchTerm });
@@ -29,7 +31,7 @@ export default function Home() {
   useEffect(() => {
     if (!isOnline && searchTerm) {
       getCachedSearchResults(searchTerm).then((cached) => {
-        setCachedClients(cached);
+        setCachedClients(cached as ClienteListItem[] | null);
       }).catch(() => setCachedClients(null));
     } else {
       setCachedClients(null);
@@ -59,6 +61,11 @@ export default function Home() {
       }
     }, 600);
   }, [searchTerm]);
+
+  const displayClients: ClienteListItem[] = useMemo(() => {
+    if (isOnline) return clients ?? [];
+    return cachedClients ?? [];
+  }, [isOnline, clients, cachedClients]);
 
   return (
     <Layout>
@@ -92,7 +99,6 @@ export default function Home() {
             />
           </div>
 
-          {/* Promarcos result when CPF typed */}
           {promarkosResult?.existe && promarkosResult.pessoa && (
             <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl bg-blue-50 border-2 border-blue-200 overflow-hidden">
               <div className="flex items-center justify-between gap-3 p-4 border-b border-blue-200">
@@ -163,7 +169,7 @@ export default function Home() {
 
         <div className="space-y-4">
           <h2 className="text-xl font-semibold px-2">
-            {isLoading ? "Buscando..." : `Resultados no sistema local (${(isOnline ? clients : cachedClients as any[])?.length || 0})`}
+            {isLoading && isOnline ? "Buscando..." : `Resultados no sistema local (${displayClients.length})`}
           </h2>
 
           {isLoading && isOnline ? (
@@ -172,7 +178,7 @@ export default function Home() {
                 <div key={i} className="bg-card rounded-2xl p-6 h-32 animate-pulse border border-border/50" />
               ))}
             </div>
-          ) : (isOnline ? clients : cachedClients as any[])?.length === 0 || (!isOnline && !cachedClients) ? (
+          ) : displayClients.length === 0 ? (
             <div className="bg-card rounded-3xl p-12 text-center border border-border/50 shadow-sm flex flex-col items-center">
               <div className="w-20 h-20 bg-primary/5 rounded-full flex items-center justify-center mb-6">
                 <Search className="w-10 h-10 text-primary/40" />
@@ -190,7 +196,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {((isOnline ? clients : cachedClients) as any[])?.map((client: any, index: number) => (
+              {displayClients.map((client, index) => (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
