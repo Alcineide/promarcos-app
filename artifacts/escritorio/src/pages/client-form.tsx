@@ -1183,30 +1183,6 @@ export default function ClientForm() {
           {activeTab === "documentos" && (isEditing || promarkosPreloaded) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               
-              {/* Pasta Local */}
-              <div className="bg-gradient-to-br from-card to-secondary/30 p-6 md:p-8 rounded-2xl shadow-sm border border-border/50">
-                <h2 className="text-xl font-bold flex items-center gap-2 mb-6">
-                  <FolderOpen className="w-5 h-5 text-accent" /> Pasta Local do Cliente
-                </h2>
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1">
-                    <FormInput form={formCtx} label="Caminho da Pasta (Local/Rede)" name="pastaPath" placeholder="Ex: C:\Escritorio\Clientes\João Silva" />
-                  </div>
-                  <div className="flex items-end gap-2 pt-2">
-                    <button type="button" onClick={copyPath} className="px-5 py-3 rounded-xl font-semibold bg-background border-2 border-border hover:bg-muted transition-colors flex items-center gap-2">
-                      <Copy className="w-4 h-4" /> Copiar
-                    </button>
-                    <button type="button" onClick={openFolder} className="px-5 py-3 rounded-xl font-semibold bg-accent text-accent-foreground shadow-lg shadow-accent/20 hover:bg-accent/90 transition-colors flex items-center gap-2">
-                      <FolderOpen className="w-4 h-4" /> Abrir Pasta
-                    </button>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> 
-                  O botão "Abrir Pasta" tenta utilizar protocolos do navegador para abrir diretórios locais.
-                </p>
-              </div>
-
               {/* Documentos Digitais */}
               <div className="bg-card p-6 md:p-8 rounded-2xl shadow-sm border border-border/50">
                 <div className="flex justify-between items-center mb-6">
