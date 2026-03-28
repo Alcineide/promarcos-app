@@ -188,6 +188,38 @@ export default function PesquisaCpf() {
             </div>
           </div>
         </div>
+
+        <div className="bg-card border border-border rounded-lg overflow-hidden mt-4">
+          <div className="p-4">
+            <h3 className="font-bold text-sm text-foreground uppercase mb-3">Consulta Pública - Tribunais</h3>
+            <p className="text-xs text-muted-foreground mb-3">Sites com proteção captcha requerem consulta manual. Clique para abrir em nova aba.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {[
+                { nome: "TRF1 - Justiça Federal 1ª Região", url: "https://pje1g-consultapublica.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam" },
+                { nome: "TRF2 - Justiça Federal 2ª Região", url: "https://pje2g.trf2.jus.br/pje2g-consultapublica/ConsultaPublica/listView.seam" },
+                { nome: "TRF3 - Justiça Federal 3ª Região", url: "https://pje1g.trf3.jus.br/pje/ConsultaPublica/listView.seam" },
+                { nome: "TRF4 - Justiça Federal 4ª Região", url: "https://pje2g.trf4.jus.br/pje/ConsultaPublica/listView.seam" },
+                { nome: "TRF5 - Justiça Federal 5ª Região", url: "https://pje.trf5.jus.br/pje/ConsultaPublica/listView.seam" },
+                { nome: "TRF6 - Justiça Federal 6ª Região", url: "https://pje1g.trf6.jus.br/consultapublica/ConsultaPublica/listView.seam" },
+                { nome: "TST - Tribunal Superior do Trabalho", url: "https://consultaprocessual.tst.jus.br/" },
+                { nome: "STJ - Superior Tribunal de Justiça", url: "https://processo.stj.jus.br/processo/pesquisa/" },
+              ].map((t, i) => (
+                <a
+                  key={i}
+                  href={t.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 rounded border border-border hover:bg-muted/50 transition-colors text-sm text-foreground hover:text-blue-400"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-muted-foreground shrink-0">
+                    <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5zm7.5-3.25a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0V4.06l-6.22 6.22a.75.75 0 11-1.06-1.06L14.94 3H12.5a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+                  </svg>
+                  {t.nome}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </Layout>
   );
