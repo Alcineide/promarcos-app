@@ -132,6 +132,20 @@ async function automacaoPjeTrf1(page: import("puppeteer-core").Page, cpf: string
 
   await page.waitForSelector('.rich-table, .rf-dt, .resultados, .alert, .rich-panel', { timeout: 10000 }).catch(() => null);
   await new Promise(r => setTimeout(r, 2000));
+
+  await page.evaluate(async () => {
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+    let prev = 0;
+    let curr = document.body.scrollHeight;
+    while (curr !== prev) {
+      window.scrollTo(0, curr);
+      await delay(500);
+      prev = curr;
+      curr = document.body.scrollHeight;
+    }
+    window.scrollTo(0, 0);
+  });
+  await new Promise(r => setTimeout(r, 1000));
 }
 
 async function automacaoTrf1Processual(page: import("puppeteer-core").Page, cpf: string): Promise<void> {
@@ -212,11 +226,21 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
       await automacaoTrf1Processual(page, cpf);
     }
 
-    const pdfBuffer = await page.pdf({
-      format: "A4",
+    const pdfOptions: Parameters<typeof page.pdf>[0] = {
       printBackground: true,
       margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
-    });
+    };
+
+    if (config.automacao === "pje_trf1") {
+      const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
+      const pageWidthPx = 1280;
+      pdfOptions.width = `${pageWidthPx}px`;
+      pdfOptions.height = `${bodyHeight + 40}px`;
+    } else {
+      pdfOptions.format = "A4";
+    }
+
+    const pdfBuffer = await page.pdf(pdfOptions);
 
     return Buffer.from(pdfBuffer);
   } finally {
@@ -268,11 +292,20 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
         || /sua pesquisa não encontrou/i.test(pageText)
         || /0 resultados? encontrados?/i.test(pageText);
 
-      const pdfBuffer = await page.pdf({
-        format: "A4",
+      const consultaPdfOptions: Parameters<typeof page.pdf>[0] = {
         printBackground: true,
         margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
-      });
+      };
+
+      if (config.automacao === "pje_trf1") {
+        const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
+        consultaPdfOptions.width = "1280px";
+        consultaPdfOptions.height = `${bodyHeight + 40}px`;
+      } else {
+        consultaPdfOptions.format = "A4";
+      }
+
+      const pdfBuffer = await page.pdf(consultaPdfOptions);
 
       const pdfBase64 = Buffer.from(pdfBuffer).toString("base64");
 
@@ -360,14 +393,23 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
 
           const headerHtml = `<div style="font-size:10px;font-family:Arial;color:#333;padding:5px 10mm;border-bottom:1px solid #ccc;"><b>Fonte: ${siteKey.toUpperCase().replace(/_/g, " ")}</b> | CPF: ${cpf} | ${new Date().toLocaleDateString("pt-BR")}</div>`;
 
-          const pdfBuf = await page.pdf({
-            format: "A4",
+          const todasPdfOpts: Parameters<typeof page.pdf>[0] = {
             printBackground: true,
             margin: { top: "25mm", bottom: "10mm", left: "10mm", right: "10mm" },
             displayHeaderFooter: true,
             headerTemplate: headerHtml,
             footerTemplate: '<div style="font-size:8px;text-align:center;width:100%;color:#999;">Promarcos - Mendes Advocacia | Página <span class="pageNumber"></span></div>',
-          });
+          };
+
+          if (config.automacao === "pje_trf1") {
+            const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
+            todasPdfOpts.width = "1280px";
+            todasPdfOpts.height = `${bodyHeight + 40}px`;
+          } else {
+            todasPdfOpts.format = "A4";
+          }
+
+          const pdfBuf = await page.pdf(todasPdfOpts);
           capturas.push(Buffer.from(pdfBuf));
         } catch {
           req.log.warn({ siteKey }, "Falha ao capturar pagina");
