@@ -94,78 +94,37 @@ function formatCpfDots(cpf: string): string {
 
 async function automacaoPjeTrf1(page: import("puppeteer-core").Page, cpf: string): Promise<void> {
   const cpfFormatado = formatCpfDots(cpf);
-  const cpfSoNumeros = cpf.replace(/\D/g, "");
 
-  await new Promise(r => setTimeout(r, 2000));
+  await new Promise(r => setTimeout(r, 3000));
 
-  await page.evaluate(() => {
-    const radios = document.querySelectorAll('input[type="radio"]');
-    for (const r of radios) {
-      const radio = r as HTMLInputElement;
-      if (radio.value === "CPF") {
-        radio.click();
-        return;
-      }
-      const label = radio.parentElement?.textContent || "";
-      const forLabel = radio.id ? document.querySelector(`label[for="${radio.id}"]`)?.textContent || "" : "";
-      if (/\bCPF\b/.test(label) || /\bCPF\b/.test(forLabel)) {
-        radio.click();
-        return;
-      }
-    }
-    const labels = document.querySelectorAll('label');
-    for (const l of labels) {
-      if (/\bCPF\b/.test(l.textContent || "") && !/CNPJ/.test(l.textContent || "")) {
-        l.click();
-        return;
-      }
-    }
-  });
-  await new Promise(r => setTimeout(r, 500));
+  const cpfInputSel = 'input[id="fPP:dpDec:documentoParte"]';
+  await page.waitForSelector(cpfInputSel, { timeout: 10000 }).catch(() => null);
 
-  await page.evaluate((cpfDots: string, cpfNums: string) => {
-    const selectors = [
-      'input[id$="pesquisarDocumento:cpfCnpj"]',
-      'input[id$="cpfCnpj"]',
-      'input[name*="cpf"]',
-      'input[name*="Cpf"]',
-    ];
-    for (const sel of selectors) {
-      const el = document.querySelector(sel) as HTMLInputElement | null;
+  const cpfInput = await page.$(cpfInputSel);
+  if (cpfInput) {
+    await cpfInput.click({ clickCount: 3 });
+    await new Promise(r => setTimeout(r, 200));
+    await cpfInput.type(cpfFormatado, { delay: 50 });
+  } else {
+    await page.evaluate((cpfVal: string) => {
+      const el = document.querySelector('input[id$="documentoParte"]') as HTMLInputElement | null;
       if (el) {
         el.focus();
-        el.value = cpfDots;
+        el.value = cpfVal;
         el.dispatchEvent(new Event("input", { bubbles: true }));
         el.dispatchEvent(new Event("change", { bubbles: true }));
-        el.dispatchEvent(new Event("blur", { bubbles: true }));
-        return;
       }
-    }
-    const inputs = document.querySelectorAll('input[type="text"]');
-    for (const inp of inputs) {
-      const input = inp as HTMLInputElement;
-      const id = input.id || "";
-      const name = input.name || "";
-      const placeholder = input.placeholder || "";
-      if (/cpf|cnpj/i.test(id) || /cpf|cnpj/i.test(name) || /cpf|cnpj/i.test(placeholder)) {
-        input.focus();
-        input.value = cpfDots;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-        input.dispatchEvent(new Event("blur", { bubbles: true }));
-        return;
-      }
-    }
-  }, cpfFormatado, cpfSoNumeros);
+    }, cpfFormatado);
+  }
 
   await new Promise(r => setTimeout(r, 1000));
 
-  const pesquisarBtn = await page.$('input[id$="pesquisarDocumento:btnPesquisar"]');
+  const pesquisarBtn = await page.$('input[id="fPP:searchProcessos"]');
   if (pesquisarBtn) {
     await pesquisarBtn.click();
   } else {
     await page.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll('input[type="submit"], input[type="button"], button'));
+      const btns = Array.from(document.querySelectorAll('input[type="button"], input[type="submit"], button'));
       for (const btn of btns) {
         const val = btn instanceof HTMLInputElement ? btn.value : btn.textContent || "";
         if (val.toUpperCase().includes("PESQUISAR")) {
@@ -176,9 +135,9 @@ async function automacaoPjeTrf1(page: import("puppeteer-core").Page, cpf: string
     });
   }
 
-  await new Promise(r => setTimeout(r, 7000));
+  await new Promise(r => setTimeout(r, 8000));
 
-  await page.waitForSelector('.rich-table, .rf-dt, .resultados, .alert, .rich-panel, table.list', { timeout: 15000 }).catch(() => null);
+  await page.waitForSelector('.rich-table, .rf-dt, .resultados, .rich-panel, table.list, .listView, div[id$="resultados"]', { timeout: 15000 }).catch(() => null);
   await new Promise(r => setTimeout(r, 3000));
 
   await page.evaluate(async () => {
@@ -394,10 +353,21 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
 
       const pageText = await page.evaluate(() => document.body?.innerText || "");
 
-      const semResultado = /nenhum (resultado|processo|registro|dado)/i.test(pageText)
-        || /não (encontr|retorn)/i.test(pageText)
-        || /sua pesquisa não encontrou/i.test(pageText)
-        || /0 resultados? encontrados?/i.test(pageText);
+      let semResultado: boolean;
+      if (config.automacao === "pje_trf1") {
+        const matchResultados = pageText.match(/(\d+)\s*resultados?\s*encontrados?/i);
+        if (matchResultados) {
+          semResultado = parseInt(matchResultados[1], 10) === 0;
+        } else {
+          semResultado = /nenhum (resultado|processo|registro)/i.test(pageText)
+            || /sua pesquisa não encontrou/i.test(pageText);
+        }
+      } else {
+        semResultado = /nenhum (resultado|processo|registro|dado)/i.test(pageText)
+          || /não (encontr|retorn)/i.test(pageText)
+          || /sua pesquisa não encontrou/i.test(pageText)
+          || /0 resultados? encontrados?/i.test(pageText);
+      }
 
       const dataAtual = new Date().toLocaleDateString("pt-BR") + ", " + new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       const pageUrl = await page.url();
