@@ -176,6 +176,86 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
   }
 }
 
+router.post("/pesquisa/consultar-site", async (req, res) => {
+  try {
+    const { siteKey, cpf } = req.body as { siteKey: string; cpf: string };
+
+    if (!siteKey || !SITE_CONFIGS[siteKey]) {
+      res.json({ siteKey, encontrado: false, mensagem: "Site não configurado", pdf: null });
+      return;
+    }
+
+    const config = SITE_CONFIGS[siteKey];
+    req.log.info({ siteKey, cpf }, "Consultando site com captura");
+
+    const browser = await puppeteer.launch({
+      executablePath: CHROMIUM_PATH,
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-extensions",
+        "--single-process",
+      ],
+    });
+
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 1280, height: 900 });
+
+      await page.goto(config.url, {
+        waitUntil: "networkidle2",
+        timeout: 25000,
+      }).catch(() => {
+        return page.goto(config.url, { waitUntil: "load", timeout: 15000 });
+      });
+
+      await new Promise(r => setTimeout(r, 2000));
+
+      if (config.automacao === "pje_trf1") {
+        await automacaoPjeTrf1(page, cpf);
+      } else if (config.automacao === "trf1_processual") {
+        await automacaoTrf1Processual(page, cpf);
+      }
+
+      const pageText = await page.evaluate(() => document.body?.innerText || "");
+
+      const semResultado = /nenhum (resultado|processo|registro|dado)/i.test(pageText)
+        || /não (encontr|retorn)/i.test(pageText)
+        || /sua pesquisa não encontrou/i.test(pageText)
+        || /0 resultados? encontrados?/i.test(pageText);
+
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+      });
+
+      const pdfBase64 = Buffer.from(pdfBuffer).toString("base64");
+
+      res.json({
+        siteKey,
+        encontrado: !semResultado,
+        mensagem: semResultado ? "Nenhuma informação neste local" : "Página capturada com sucesso",
+        pdf: pdfBase64,
+      });
+    } finally {
+      await browser.close();
+    }
+  } catch (err) {
+    req.log.error(err, "Erro ao consultar site");
+    const siteKey = (req.body as { siteKey?: string }).siteKey || "";
+    res.json({
+      siteKey,
+      encontrado: false,
+      mensagem: "Site temporariamente indisponível",
+      pdf: null,
+    });
+  }
+});
+
 router.post("/pesquisa/capturar-pagina", async (req, res) => {
   try {
     const { siteKey, cpf } = req.body as { siteKey: string; cpf: string };
