@@ -44,7 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             alt="Mendes Advocacia"
             className="w-10 h-10 rounded-xl object-cover"
           />
-          <span className="font-display font-bold text-lg tracking-wide">Mendes Advocacia</span>
+          <span className="font-display font-bold text-lg tracking-wide">Promarcos - Clientes</span>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
           {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -70,9 +70,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             />
           </div>
           <h1 className="font-display font-bold text-[17px] tracking-wide text-center text-white/95 leading-tight">
-            Mendes Advocacia
+            Promarcos
           </h1>
-          <p className="text-[10px] font-medium text-[#6ba3d6] tracking-[0.2em] uppercase mt-1">Promarcos</p>
+          <p className="text-[10px] font-medium text-[#6ba3d6] tracking-[0.2em] uppercase mt-1">Clientes</p>
         </div>
 
         <div className="mx-4 border-t border-white/[0.06]" />
@@ -172,8 +172,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
               />
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-semibold text-white/80">Mendes Advocacia</span>
-              <span className="text-[10px] text-white/35">Gestão Jurídica</span>
+              <span className="text-xs font-semibold text-white/80">Promarcos</span>
+              <span className="text-[10px] text-white/35">Clientes</span>
             </div>
           </div>
         </div>
