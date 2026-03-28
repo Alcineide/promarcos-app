@@ -1,6 +1,9 @@
 import { Feather } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system/src/legacy/FileSystem";
+import { EncodingType } from "expo-file-system/src/legacy/FileSystem.types";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as Print from "expo-print";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -152,17 +155,52 @@ export default function ScannerScreen() {
     setPages((prev) => prev.filter((p) => p.id !== id));
   }
 
-  function handleAddToQueue() {
+  const [building, setBuilding] = useState(false);
+
+  async function handleAddToQueue() {
     if (pages.length === 0) return;
-    addToQueue({
-      clienteId,
-      clienteNome,
-      categoria,
-      categoriaNome: tipoPromarcos,
-      pages: [...pages],
-    });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    setBuilding(true);
+    try {
+      const base64Images = await Promise.all(
+        pages.map(async (page) => {
+          const b64 = await FileSystem.readAsStringAsync(page.uri, { encoding: EncodingType.Base64 });
+          const ext = page.uri.split(".").pop()?.toLowerCase() ?? "jpg";
+          const mime = ext === "png" ? "image/png" : "image/jpeg";
+          return { b64, mime };
+        })
+      );
+
+      const pageHtml = base64Images.map(
+        ({ b64, mime }) =>
+          `<div style="page-break-after:always;width:100%;height:100vh;display:flex;align-items:center;justify-content:center;margin:0;padding:0;">
+            <img src="data:${mime};base64,${b64}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
+          </div>`
+      );
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#fff;}</style></head><body>${pageHtml.join("")}</body></html>`;
+      const { uri } = await Print.printToFileAsync({ html });
+      const pdfBase64 = await FileSystem.readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+
+      const safeName = (clienteNome ?? "cliente").toUpperCase().replace(/\s+/g, "_");
+      const pdfFileName = `${safeName}_${tipoPromarcos.replace(/\s+/g, "_")}_${Date.now()}.pdf`;
+
+      addToQueue({
+        clienteId,
+        clienteNome,
+        categoria,
+        categoriaNome: tipoPromarcos,
+        pages: [...pages],
+        pdfBase64,
+        pdfFileName,
+        pageCount: pages.length,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (err) {
+      Alert.alert("Erro", "Não foi possível preparar o PDF. Tente novamente.");
+    } finally {
+      setBuilding(false);
+    }
   }
 
   return (
@@ -260,17 +298,21 @@ export default function ScannerScreen() {
 
         {/* Add to queue / Done */}
         <Pressable
-          style={[styles.iconBtn, pages.length === 0 && styles.iconBtnDisabled]}
+          style={[styles.iconBtn, (pages.length === 0 || building) && styles.iconBtnDisabled]}
           onPress={handleAddToQueue}
-          disabled={pages.length === 0}
+          disabled={pages.length === 0 || building}
         >
-          <Feather
-            name="check-circle"
-            size={22}
-            color={pages.length > 0 ? Colors.success : Colors.textMuted}
-          />
-          <Text style={[styles.iconBtnLabel, pages.length === 0 && { color: Colors.textMuted }]}>
-            Confirmar
+          {building ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            <Feather
+              name="check-circle"
+              size={22}
+              color={pages.length > 0 ? Colors.success : Colors.textMuted}
+            />
+          )}
+          <Text style={[styles.iconBtnLabel, (pages.length === 0 || building) && { color: Colors.textMuted }]}>
+            {building ? "Preparando..." : "Confirmar"}
           </Text>
         </Pressable>
       </View>

@@ -25,6 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { QueuedDoc, useScanQueue } from "@/contexts/ScanQueue";
 import { useNetworkStatus } from "@/lib/network";
 import { registrarUpload } from "@/lib/audit-service";
+import { cacheClientDetail } from "@/lib/client-cache";
 import { acquireSyncLock, releaseSyncLock, triggerSync } from "@/lib/upload-sync";
 
 const CATEGORIAS = [
@@ -124,12 +125,18 @@ export default function ClienteScreen() {
   const { isOnline } = useNetworkStatus();
   const { queue, removeFromQueue, clearClientQueue, updateDocStatus } = useScanQueue();
   const clientQueue = queue.filter((d) => d.clienteId === id);
-  const totalPages = clientQueue.reduce((acc, d) => acc + d.pages.length, 0);
+  const totalPages = clientQueue.reduce((acc, d) => acc + (d.pageCount || d.pages.length), 0);
 
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  React.useEffect(() => {
+    if (id && nome) {
+      cacheClientDetail(parseInt(id, 10), { codigo: parseInt(id, 10), nomecompleto: nome, cpf: cpf || "" });
+    }
+  }, [id, nome, cpf]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -199,9 +206,19 @@ export default function ClienteScreen() {
         setProgress({ current: i + 1, total: pending.length });
         updateDocStatus(doc.id, "syncing");
         try {
-          const { uri: pdfUri, fileName: pdfFileName } = await buildPdfForDoc(doc);
+          let pdfBase64: string;
+          let pdfFileName: string;
+          let pdfUri: string | undefined;
 
-          const pdfBase64 = await FileSystem.readAsStringAsync(pdfUri, { encoding: EncodingType.Base64 });
+          if (doc.pdfBase64 && doc.pdfFileName) {
+            pdfBase64 = doc.pdfBase64;
+            pdfFileName = doc.pdfFileName;
+          } else {
+            const built = await buildPdfForDoc(doc);
+            pdfUri = built.uri;
+            pdfFileName = built.fileName;
+            pdfBase64 = await FileSystem.readAsStringAsync(pdfUri, { encoding: EncodingType.Base64 });
+          }
 
           const nomeCliente = (doc.clienteNome ?? "").trim() || "Cliente";
           await apiPost("/promarcos/arquivo", {
@@ -213,7 +230,12 @@ export default function ClienteScreen() {
             mimeType: "application/pdf",
           });
 
-          await saveToDevice(pdfUri, pdfFileName, doc.clienteNome);
+          if (!pdfUri && doc.pdfBase64) {
+            const tmpPath = `${FileSystem.documentDirectory}tmp_${pdfFileName}`;
+            await FileSystem.writeAsStringAsync(tmpPath, doc.pdfBase64, { encoding: EncodingType.Base64 });
+            pdfUri = tmpPath;
+          }
+          if (pdfUri) await saveToDevice(pdfUri, pdfFileName, doc.clienteNome);
           if (user) {
             registrarUpload(
               { email: user.email, codigo: user.codigo },

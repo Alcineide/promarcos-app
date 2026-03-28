@@ -59,7 +59,18 @@ async function buildPdfBase64(doc: QueuedDoc): Promise<{ base64: string; fileNam
 }
 
 async function uploadSingleDoc(doc: QueuedDoc): Promise<void> {
-  const { base64, fileName } = await buildPdfBase64(doc);
+  let base64: string;
+  let fileName: string;
+
+  if (doc.pdfBase64 && doc.pdfFileName) {
+    base64 = doc.pdfBase64;
+    fileName = doc.pdfFileName;
+  } else {
+    const built = await buildPdfBase64(doc);
+    base64 = built.base64;
+    fileName = built.fileName;
+  }
+
   const nomeCliente = (doc.clienteNome ?? "").trim() || "Cliente";
 
   await apiPost("/promarcos/arquivo", {
@@ -85,7 +96,14 @@ export async function processUploadQueue(): Promise<{ synced: number; failed: nu
   let failed = 0;
 
   try {
-    const pending = queueRef.filter((d) => d.uploadStatus === "pending" || d.uploadStatus === "failed");
+    const now = Date.now();
+    const pending = queueRef.filter((d) => {
+      if (d.uploadStatus === "pending") return true;
+      if (d.uploadStatus === "failed") {
+        return !d.nextRetryAt || d.nextRetryAt <= now;
+      }
+      return false;
+    });
 
     for (const doc of pending) {
       if (!updateStatusRef) break;

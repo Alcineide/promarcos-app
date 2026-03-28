@@ -68,3 +68,30 @@ export async function searchCachedClients(termo: string): Promise<CachedClient[]
 export async function getCachedClients(): Promise<CachedClient[]> {
   return getAll();
 }
+
+const DETAIL_CACHE_KEY = "@mendes/client-detail-cache";
+
+export async function cacheClientDetail(codigo: number, detail: Record<string, any>): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(DETAIL_CACHE_KEY);
+    const cache: Record<string, any> = raw ? JSON.parse(raw) : {};
+    cache[String(codigo)] = { ...detail, _cachedAt: Date.now() };
+    const keys = Object.keys(cache);
+    if (keys.length > MAX_CACHED) {
+      const sorted = keys.sort((a, b) => (cache[b]._cachedAt ?? 0) - (cache[a]._cachedAt ?? 0));
+      sorted.slice(MAX_CACHED).forEach((k) => delete cache[k]);
+    }
+    await AsyncStorage.setItem(DETAIL_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
+}
+
+export async function getCachedClientDetail(codigo: number): Promise<Record<string, any> | null> {
+  try {
+    const raw = await AsyncStorage.getItem(DETAIL_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw);
+    return cache[String(codigo)] ?? null;
+  } catch {
+    return null;
+  }
+}

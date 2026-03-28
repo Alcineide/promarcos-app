@@ -12,15 +12,19 @@ export interface QueuedDoc {
   categoria: string;
   categoriaNome: string;
   pages: { id: string; uri: string }[];
+  pdfBase64?: string;
+  pdfFileName?: string;
+  pageCount: number;
   addedAt: string;
   uploadStatus: UploadStatus;
   lastError?: string;
   retryCount: number;
+  nextRetryAt?: number;
 }
 
 interface ScanQueueContextValue {
   queue: QueuedDoc[];
-  addToQueue: (doc: Omit<QueuedDoc, "id" | "addedAt" | "uploadStatus" | "retryCount">) => void;
+  addToQueue: (doc: Omit<QueuedDoc, "id" | "addedAt" | "uploadStatus" | "retryCount" | "nextRetryAt">) => void;
   removeFromQueue: (docId: string) => void;
   clearClientQueue: (clienteId: string) => void;
   clearAll: () => void;
@@ -52,6 +56,7 @@ export function ScanQueueProvider({ children }: { children: React.ReactNode }) {
               uploadStatus: (!d.uploadStatus || d.uploadStatus === "syncing") ? "pending" as UploadStatus : d.uploadStatus,
               retryCount: d.retryCount ?? 0,
               addedAt: d.addedAt ?? new Date().toISOString(),
+              pageCount: d.pageCount ?? d.pages?.length ?? 0,
             }));
           setQueue(restored);
         } catch {}
@@ -66,7 +71,7 @@ export function ScanQueueProvider({ children }: { children: React.ReactNode }) {
     }
   }, [queue]);
 
-  const addToQueue = useCallback((doc: Omit<QueuedDoc, "id" | "addedAt" | "uploadStatus" | "retryCount">) => {
+  const addToQueue = useCallback((doc: Omit<QueuedDoc, "id" | "addedAt" | "uploadStatus" | "retryCount" | "nextRetryAt">) => {
     const newDoc: QueuedDoc = {
       ...doc,
       id: makeId(),
@@ -89,23 +94,27 @@ export function ScanQueueProvider({ children }: { children: React.ReactNode }) {
 
   const updateDocStatus = useCallback((docId: string, status: UploadStatus, error?: string) => {
     setQueue((prev) =>
-      prev.map((d) =>
-        d.id === docId
-          ? {
-              ...d,
-              uploadStatus: status,
-              lastError: error || d.lastError,
-              retryCount: status === "failed" ? d.retryCount + 1 : d.retryCount,
-            }
-          : d
-      ).filter((d) => d.uploadStatus !== "synced")
+      prev.map((d) => {
+        if (d.id !== docId) return d;
+        const newRetryCount = status === "failed" ? d.retryCount + 1 : d.retryCount;
+        const backoffMs = status === "failed"
+          ? Math.min(30_000 * Math.pow(2, newRetryCount - 1), 600_000)
+          : 0;
+        return {
+          ...d,
+          uploadStatus: status,
+          lastError: error || d.lastError,
+          retryCount: newRetryCount,
+          nextRetryAt: status === "failed" ? Date.now() + backoffMs : undefined,
+        };
+      }).filter((d) => d.uploadStatus !== "synced")
     );
   }, []);
 
   const markForRetry = useCallback((docId: string) => {
     setQueue((prev) =>
       prev.map((d) =>
-        d.id === docId ? { ...d, uploadStatus: "pending" as UploadStatus, lastError: undefined } : d
+        d.id === docId ? { ...d, uploadStatus: "pending" as UploadStatus, lastError: undefined, nextRetryAt: undefined } : d
       )
     );
   }, []);
