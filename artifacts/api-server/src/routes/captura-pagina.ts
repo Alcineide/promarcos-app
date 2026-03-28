@@ -7,7 +7,7 @@ const CHROMIUM_PATH = "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.
 
 interface SiteConfig {
   url: string;
-  automacao?: "pje_trf1";
+  automacao?: "pje_trf1" | "trf1_processual";
 }
 
 const PJE_TRF1_URL = "https://pje1g-consultapublica.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam";
@@ -24,12 +24,12 @@ const SITE_CONFIGS: Record<string, SiteConfig> = {
   cnd_to: { url: "https://app.sefaz.to.gov.br/SINTEGRA-WEB/" },
   contag: { url: "https://www.contag.org.br" },
   pje_trf1: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
-  trf1_secao_to: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
-  trf1_araguaina: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
-  trf1_balsas: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
-  trf1_imperatriz: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
-  trf1_palmas: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
-  trf1_gurupi: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
+  trf1_secao_to: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=TO", automacao: "trf1_processual" },
+  trf1_araguaina: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=TO&subsecao=ARAGUAINA", automacao: "trf1_processual" },
+  trf1_balsas: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=MA&subsecao=BALSAS", automacao: "trf1_processual" },
+  trf1_imperatriz: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=MA&subsecao=IMPERATRIZ", automacao: "trf1_processual" },
+  trf1_palmas: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=TO&subsecao=PALMAS", automacao: "trf1_processual" },
+  trf1_gurupi: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=TO&subsecao=GURUPI", automacao: "trf1_processual" },
   tse_local_votacao: { url: "https://www.tse.jus.br/servicos-eleitorais/titulo-e-local-de-votacao/consulta-por-nome" },
   tse_certidao: { url: "https://www.tse.jus.br/servicos-eleitorais/certidoes/certidao-de-quitacao-eleitoral" },
 };
@@ -79,6 +79,53 @@ async function automacaoPjeTrf1(page: import("puppeteer-core").Page, cpf: string
   await new Promise(r => setTimeout(r, 2000));
 }
 
+async function automacaoTrf1Processual(page: import("puppeteer-core").Page, cpf: string): Promise<void> {
+  await page.waitForSelector('input[name="txtCPFCNPJ"], input[name="numCPF"], input[name="cpfCnpj"], #txtCPFCNPJ', { timeout: 10000 }).catch(() => null);
+
+  const cpfFormatado = formatCpfDots(cpf);
+
+  await page.evaluate((cpfVal: string) => {
+    const possibleSelectors = [
+      'input[name="txtCPFCNPJ"]',
+      'input[name="numCPF"]',
+      'input[name="cpfCnpj"]',
+      '#txtCPFCNPJ',
+      'input[name="cpf"]',
+    ];
+    for (const sel of possibleSelectors) {
+      const el = document.querySelector(sel) as HTMLInputElement | null;
+      if (el) {
+        el.value = cpfVal;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        break;
+      }
+    }
+  }, cpfFormatado);
+
+  await new Promise(r => setTimeout(r, 500));
+
+  const clicked = await page.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('input[type="submit"], input[type="button"], button'));
+    for (const btn of btns) {
+      const val = btn instanceof HTMLInputElement ? btn.value : btn.textContent || "";
+      if (val.toUpperCase().includes("PESQUIS") || val.toUpperCase().includes("CONSULTAR") || val.toUpperCase().includes("BUSCAR")) {
+        (btn as HTMLElement).click();
+        return true;
+      }
+    }
+    const form = document.querySelector("form");
+    if (form) { form.submit(); return true; }
+    return false;
+  });
+
+  if (clicked) {
+    await new Promise(r => setTimeout(r, 5000));
+    await page.waitForSelector('table, .resultado, .listagem, .alert, #divResultado', { timeout: 10000 }).catch(() => null);
+    await new Promise(r => setTimeout(r, 2000));
+  }
+}
+
 async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
   const config = SITE_CONFIGS[siteKey];
   if (!config) {
@@ -113,6 +160,8 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
 
     if (config.automacao === "pje_trf1") {
       await automacaoPjeTrf1(page, cpf);
+    } else if (config.automacao === "trf1_processual") {
+      await automacaoTrf1Processual(page, cpf);
     }
 
     const pdfBuffer = await page.pdf({
@@ -191,6 +240,8 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
 
           if (config.automacao === "pje_trf1") {
             await automacaoPjeTrf1(page, cpf);
+          } else if (config.automacao === "trf1_processual") {
+            await automacaoTrf1Processual(page, cpf);
           }
 
           const headerHtml = `<div style="font-size:10px;font-family:Arial;color:#333;padding:5px 10mm;border-bottom:1px solid #ccc;"><b>Fonte: ${siteKey.toUpperCase().replace(/_/g, " ")}</b> | CPF: ${cpf} | ${new Date().toLocaleDateString("pt-BR")}</div>`;
