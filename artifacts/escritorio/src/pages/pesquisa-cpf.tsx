@@ -12,9 +12,6 @@ interface PesquisaResult {
 }
 
 const CONSULTAS = [
-  { key: "dap", label: "DAP", url: "https://smap14.mda.gov.br/extratodap/PesquisarDAP", descricao: "Declaração de Aptidão ao PRONAF" },
-  { key: "caf", label: "CAF", url: "https://caf.mda.gov.br/consulta-publica/ufpa", descricao: "Cadastro da Agricultura Familiar" },
-  { key: "incra", label: "INCRA", url: "https://saladacidadania.incra.gov.br", descricao: "Sala da Cidadania - INCRA" },
   { key: "pje_trf1", label: "PJE-TRF1", url: "https://pje1g-consultapublica.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", descricao: "PJe TRF1 - Processos Eletrônicos (Novo)" },
   { key: "trf1_secao_to", label: "TRF1-SEÇÃO-TO", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO", descricao: "TRF1 Seção Judiciária TO - Processos Físicos (Antigo)" },
   { key: "trf1_araguaina", label: "TRF1-ARAGUAÍNA", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=ARAGUAINA", descricao: "TRF1 Subseção Araguaína - Processos Físicos (Antigo)" },

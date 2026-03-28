@@ -80,9 +80,6 @@ interface DadosPesquisa {
 const PJE_TRF1_URL = "https://pje1g-consultapublica.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam";
 
 const SITE_CONFIGS: Record<string, SiteConfig> = {
-  dap: { url: "https://smap14.mda.gov.br/extratodap/PesquisarDAP" },
-  caf: { url: "https://caf.mda.gov.br/consulta-publica/ufpa" },
-  incra: { url: "https://saladacidadania.incra.gov.br" },
   pje_trf1: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
   trf1_secao_to: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO", automacao: "trf1_processual" },
   trf1_araguaina: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=ARAGUAINA", automacao: "trf1_processual" },
