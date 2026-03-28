@@ -83,12 +83,12 @@ const SITE_CONFIGS: Record<string, SiteConfig> = {
   cnd_to: { url: "https://app.sefaz.to.gov.br/SINTEGRA-WEB/" },
   contag: { url: "https://www.contag.org.br" },
   pje_trf1: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
-  trf1_secao_to: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=TO", automacao: "trf1_processual" },
-  trf1_araguaina: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=TO&subsecao=ARAGUAINA", automacao: "trf1_processual" },
-  trf1_balsas: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=MA&subsecao=BALSAS", automacao: "trf1_processual" },
-  trf1_imperatriz: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=MA&subsecao=IMPERATRIZ", automacao: "trf1_processual" },
-  trf1_palmas: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=TO&subsecao=PALMAS", automacao: "trf1_processual" },
-  trf1_gurupi: { url: "https://processual.trf1.jus.br/consultaProcessual/consultaProcessual.php?secao=TO&subsecao=GURUPI", automacao: "trf1_processual" },
+  trf1_secao_to: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO", automacao: "trf1_processual" },
+  trf1_araguaina: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=ARAGUAINA", automacao: "trf1_processual" },
+  trf1_balsas: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=MA&subsecao=BALSAS", automacao: "trf1_processual" },
+  trf1_imperatriz: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=MA&subsecao=IMPERATRIZ", automacao: "trf1_processual" },
+  trf1_palmas: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=PALMAS", automacao: "trf1_processual" },
+  trf1_gurupi: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=GURUPI", automacao: "trf1_processual" },
   tse_local_votacao: { url: "https://www.tse.jus.br/servicos-eleitorais/titulo-e-local-de-votacao/consulta-por-nome" },
   tse_certidao: { url: "https://www.tse.jus.br/servicos-eleitorais/certidoes/certidao-de-quitacao-eleitoral" },
 };
@@ -100,42 +100,93 @@ function formatCpfDots(cpf: string): string {
 }
 
 async function automacaoPjeTrf1(page: import("puppeteer-core").Page, cpf: string): Promise<void> {
-  await page.waitForSelector('input[id$="pesquisarDocumento:cpfCnpj"]', { timeout: 10000 }).catch(() => null);
-
   const cpfFormatado = formatCpfDots(cpf);
+  const cpfSoNumeros = cpf.replace(/\D/g, "");
 
-  await page.evaluate((cpfVal: string) => {
-    const cpfInput = document.querySelector('input[id$="pesquisarDocumento:cpfCnpj"]') as HTMLInputElement | null;
-    if (cpfInput) {
-      cpfInput.value = cpfVal;
-      cpfInput.dispatchEvent(new Event("input", { bubbles: true }));
-      cpfInput.dispatchEvent(new Event("change", { bubbles: true }));
+  await new Promise(r => setTimeout(r, 2000));
+
+  const cpfRadio = await page.$('input[type="radio"][value="CPF"], input[id$="cpfRadio"], label:has-text("CPF")');
+  if (cpfRadio) {
+    await cpfRadio.click();
+    await new Promise(r => setTimeout(r, 500));
+  } else {
+    await page.evaluate(() => {
+      const radios = document.querySelectorAll('input[type="radio"]');
+      for (const r of radios) {
+        const label = r.parentElement?.textContent || "";
+        if (/\bCPF\b/.test(label) && !/CNPJ/.test(label)) {
+          (r as HTMLInputElement).click();
+          return;
+        }
+      }
+      const labels = document.querySelectorAll('label');
+      for (const l of labels) {
+        if (/\bCPF\b/.test(l.textContent || "") && !/CNPJ/.test(l.textContent || "")) {
+          l.click();
+          return;
+        }
+      }
+    });
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  await page.evaluate((cpfDots: string, cpfNums: string) => {
+    const selectors = [
+      'input[id$="pesquisarDocumento:cpfCnpj"]',
+      'input[id$="cpfCnpj"]',
+      'input[name*="cpf"]',
+      'input[name*="Cpf"]',
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel) as HTMLInputElement | null;
+      if (el) {
+        el.focus();
+        el.value = cpfDots;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        el.dispatchEvent(new Event("blur", { bubbles: true }));
+        return;
+      }
     }
-  }, cpfFormatado);
+    const inputs = document.querySelectorAll('input[type="text"]');
+    for (const inp of inputs) {
+      const input = inp as HTMLInputElement;
+      const id = input.id || "";
+      const name = input.name || "";
+      const placeholder = input.placeholder || "";
+      if (/cpf|cnpj/i.test(id) || /cpf|cnpj/i.test(name) || /cpf|cnpj/i.test(placeholder)) {
+        input.focus();
+        input.value = cpfDots;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        input.dispatchEvent(new Event("blur", { bubbles: true }));
+        return;
+      }
+    }
+  }, cpfFormatado, cpfSoNumeros);
 
-  await new Promise(r => setTimeout(r, 500));
+  await new Promise(r => setTimeout(r, 1000));
 
   const pesquisarBtn = await page.$('input[id$="pesquisarDocumento:btnPesquisar"]');
   if (pesquisarBtn) {
     await pesquisarBtn.click();
   } else {
-    const allBtns = await page.$$('input[type="submit"], input[type="button"], button');
-    for (const btn of allBtns) {
-      const val = await page.evaluate((el: Element) => {
-        if (el instanceof HTMLInputElement) return el.value;
-        return el.textContent || "";
-      }, btn);
-      if (val && val.toUpperCase().includes("PESQUISAR")) {
-        await btn.click();
-        break;
+    await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('input[type="submit"], input[type="button"], button'));
+      for (const btn of btns) {
+        const val = btn instanceof HTMLInputElement ? btn.value : btn.textContent || "";
+        if (val.toUpperCase().includes("PESQUISAR")) {
+          (btn as HTMLElement).click();
+          return;
+        }
       }
-    }
+    });
   }
 
-  await new Promise(r => setTimeout(r, 5000));
+  await new Promise(r => setTimeout(r, 7000));
 
-  await page.waitForSelector('.rich-table, .rf-dt, .resultados, .alert, .rich-panel', { timeout: 10000 }).catch(() => null);
-  await new Promise(r => setTimeout(r, 2000));
+  await page.waitForSelector('.rich-table, .rf-dt, .resultados, .alert, .rich-panel, table.list', { timeout: 15000 }).catch(() => null);
+  await new Promise(r => setTimeout(r, 3000));
 
   await page.evaluate(async () => {
     const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -172,28 +223,52 @@ async function waitForCloudflare(page: import("puppeteer-core").Page): Promise<b
 async function automacaoTrf1Processual(page: import("puppeteer-core").Page, cpf: string): Promise<void> {
   await waitForCloudflare(page);
 
-  await page.waitForSelector('input[name="txtCPFCNPJ"], input[name="numCPF"], input[name="cpfCnpj"], #txtCPFCNPJ', { timeout: 15000 }).catch(() => null);
+  const cpfSoNumeros = cpf.replace(/\D/g, "");
 
-  const cpfFormatado = formatCpfDots(cpf);
+  await page.waitForSelector('input[name="txtCPFCNPJ"], input[name="cpfCnpj"], input[type="text"]', { timeout: 15000 }).catch(() => null);
+  await new Promise(r => setTimeout(r, 1000));
 
   await page.evaluate((cpfVal: string) => {
-    const possibleSelectors = [
+    const selectors = [
       'input[name="txtCPFCNPJ"]',
-      'input[name="numCPF"]',
       'input[name="cpfCnpj"]',
+      'input[name="numCPF"]',
       '#txtCPFCNPJ',
-      'input[name="cpf"]',
     ];
-    for (const sel of possibleSelectors) {
+    let found = false;
+    for (const sel of selectors) {
       const el = document.querySelector(sel) as HTMLInputElement | null;
       if (el) {
+        el.focus();
         el.value = cpfVal;
         el.dispatchEvent(new Event("input", { bubbles: true }));
         el.dispatchEvent(new Event("change", { bubbles: true }));
+        found = true;
         break;
       }
     }
-  }, cpfFormatado);
+    if (!found) {
+      const inputs = document.querySelectorAll('input[type="text"]');
+      for (const inp of inputs) {
+        const input = inp as HTMLInputElement;
+        const label = input.previousElementSibling?.textContent || "";
+        const placeholder = input.placeholder || "";
+        const name = input.name || "";
+        if (/cpf|cnpj/i.test(label) || /cpf|cnpj/i.test(placeholder) || /cpf|cnpj/i.test(name)) {
+          input.focus();
+          input.value = cpfVal;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          break;
+        }
+      }
+    }
+
+    const chkBaixados = document.querySelector('input[name="chkMostrarBaixados"], input[type="checkbox"]') as HTMLInputElement | null;
+    if (chkBaixados && !chkBaixados.checked) {
+      chkBaixados.click();
+    }
+  }, cpfSoNumeros);
 
   await new Promise(r => setTimeout(r, 500));
 
@@ -212,8 +287,9 @@ async function automacaoTrf1Processual(page: import("puppeteer-core").Page, cpf:
   });
 
   if (clicked) {
-    await new Promise(r => setTimeout(r, 5000));
-    await page.waitForSelector('table, .resultado, .listagem, .alert, #divResultado', { timeout: 10000 }).catch(() => null);
+    await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 15000 }).catch(() => null);
+    await new Promise(r => setTimeout(r, 3000));
+    await page.waitForSelector('table, .resultado, .listagem, .alert, #divResultado, .tabelaLista', { timeout: 10000 }).catch(() => null);
     await new Promise(r => setTimeout(r, 2000));
   }
 
