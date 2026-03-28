@@ -11,7 +11,6 @@ interface PesquisaResult {
 }
 
 const CONSULTAS = [
-  { key: "local", label: "Sistema Local" },
   { key: "dap", label: "DAP", url: "https://smap14.mda.gov.br/extratodap/PesquisarDAP", descricao: "Declaração de Aptidão ao PRONAF" },
   { key: "caf", label: "CAF", url: "https://caf.mda.gov.br/consulta-publica/ufpa", descricao: "Cadastro da Agricultura Familiar" },
   { key: "incra", label: "INCRA", url: "https://saladacidadania.incra.gov.br", descricao: "Sala da Cidadania - INCRA" },
@@ -78,34 +77,6 @@ export default function PesquisaCpf() {
     for (const consulta of CONSULTAS) {
       setFonteAtual(consulta.label);
 
-      if (consulta.key === "local") {
-        try {
-          const res = await fetch(`/api/pesquisa-cpf/local/${cpfNumerico}`);
-          if (res.ok) {
-            const data = await res.json();
-            setResultados((prev) => [...prev, {
-              local: consulta.label,
-              mensagem: data.encontrado ? (data.mensagem || "Informação localizada") : "Nenhuma informação neste local",
-              dados: data.dados || undefined,
-              siteKey: consulta.key,
-            }]);
-          } else {
-            setResultados((prev) => [...prev, {
-              local: consulta.label,
-              mensagem: "Nenhuma informação neste local",
-              siteKey: consulta.key,
-            }]);
-          }
-        } catch {
-          setResultados((prev) => [...prev, {
-            local: consulta.label,
-            mensagem: "Nenhuma informação neste local",
-            siteKey: consulta.key,
-          }]);
-        }
-        continue;
-      }
-
       try {
         const res = await fetch("/api/pesquisa/consultar-site", {
           method: "POST",
@@ -144,7 +115,6 @@ export default function PesquisaCpf() {
   function getSiteKey(label: string): string | null {
     const consulta = CONSULTAS.find(c => c.label === label);
     if (!consulta) return null;
-    if (consulta.key === "local" || consulta.key === "promarcos") return null;
     return consulta.key;
   }
 

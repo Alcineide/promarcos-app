@@ -3,7 +3,62 @@ import puppeteer from "puppeteer-core";
 
 const router: IRouter = Router();
 
-const CHROMIUM_PATH = "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium";
+import { execSync } from "child_process";
+import { existsSync, accessSync, constants } from "fs";
+
+function findChromium(): string {
+  if (process.env.CHROMIUM_PATH) {
+    const envPath = process.env.CHROMIUM_PATH;
+    try {
+      accessSync(envPath, constants.X_OK);
+      return envPath;
+    } catch { /* env path not executable */ }
+  }
+
+  const candidates = [
+    "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium",
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate)) {
+        accessSync(candidate, constants.X_OK);
+        return candidate;
+      }
+    } catch { /* not executable */ }
+  }
+
+  const whichCmds = ["which chromium", "which chromium-browser", "which google-chrome"];
+  for (const cmd of whichCmds) {
+    try {
+      const found = execSync(`${cmd} 2>/dev/null`, { encoding: "utf-8" }).trim();
+      if (found && existsSync(found)) {
+        accessSync(found, constants.X_OK);
+        return found;
+      }
+    } catch { /* not found */ }
+  }
+
+  console.error("WARNING: No Chromium executable found. PDF capture will fail.");
+  return candidates[0];
+}
+
+const CHROMIUM_PATH = findChromium();
+console.log(`Chromium path resolved: ${CHROMIUM_PATH}`);
+
+const CHROMIUM_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--disable-extensions",
+  "--disable-software-rasterizer",
+  "--disable-background-networking",
+  "--disable-default-apps",
+  "--disable-translate",
+  "--no-first-run",
+  "--disable-features=VizDisplayCompositor",
+];
 
 interface SiteConfig {
   url: string;
@@ -135,14 +190,7 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
   const browser = await puppeteer.launch({
     executablePath: CHROMIUM_PATH,
     headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-extensions",
-      "--single-process",
-    ],
+    args: CHROMIUM_ARGS,
   });
 
   try {
@@ -151,12 +199,12 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
 
     await page.goto(config.url, {
       waitUntil: "networkidle2",
-      timeout: 20000,
+      timeout: 30000,
     }).catch(() => {
-      return page.goto(config.url, { waitUntil: "load", timeout: 15000 });
+      return page.goto(config.url, { waitUntil: "load", timeout: 20000 });
     });
 
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 3000));
 
     if (config.automacao === "pje_trf1") {
       await automacaoPjeTrf1(page, cpf);
@@ -191,14 +239,7 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
     const browser = await puppeteer.launch({
       executablePath: CHROMIUM_PATH,
       headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-extensions",
-        "--single-process",
-      ],
+      args: CHROMIUM_ARGS,
     });
 
     try {
@@ -207,12 +248,12 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
 
       await page.goto(config.url, {
         waitUntil: "networkidle2",
-        timeout: 25000,
+        timeout: 30000,
       }).catch(() => {
-        return page.goto(config.url, { waitUntil: "load", timeout: 15000 });
+        return page.goto(config.url, { waitUntil: "load", timeout: 20000 });
       });
 
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 3000));
 
       if (config.automacao === "pje_trf1") {
         await automacaoPjeTrf1(page, cpf);
@@ -291,14 +332,7 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
     const browser = await puppeteer.launch({
       executablePath: CHROMIUM_PATH,
       headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-extensions",
-        "--single-process",
-      ],
+      args: CHROMIUM_ARGS,
     });
 
     const capturas: Buffer[] = [];
