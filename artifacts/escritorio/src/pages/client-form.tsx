@@ -428,9 +428,11 @@ export default function ClientForm() {
     }
   };
 
-  // --- Local State for Documents ---
-  const [generatedDocs, setGeneratedDocs] = useState<{name: string, date: Date}[]>([]);
+  // --- ZapSign Document State ---
   const [generatingDoc, setGeneratingDoc] = useState<string | null>(null);
+  const [zapsignDocs, setZapsignDocs] = useState<any[]>([]);
+  const [loadingZapDocs, setLoadingZapDocs] = useState(false);
+  const [signingAll, setSigningAll] = useState(false);
 
   const getClienteDocData = () => {
     const vals = getValues();
@@ -456,6 +458,27 @@ export default function ClientForm() {
     };
   };
 
+  const fetchZapsignDocs = async (cpf: string) => {
+    if (!cpf) return;
+    setLoadingZapDocs(true);
+    try {
+      const res = await fetch(`/api/zapsign/documentos/${cpf.replace(/\D/g, "")}`);
+      if (res.ok) {
+        const data = await res.json();
+        setZapsignDocs(data);
+      }
+    } catch {} finally {
+      setLoadingZapDocs(false);
+    }
+  };
+
+  useEffect(() => {
+    const cpf = getValues("cpf");
+    if (cpf && (promarkosPreloaded || isEditing)) {
+      fetchZapsignDocs(cpf);
+    }
+  }, [promarkosPreloaded, isEditing]);
+
   const generateDoc = async (name: string) => {
     const clienteData = getClienteDocData();
     if (!clienteData.nomeCompleto || !clienteData.cpf) {
@@ -463,48 +486,128 @@ export default function ClientForm() {
       return;
     }
 
-    if (name === "Pacote Completo") {
-      const tipos = ["Procuração Extra", "Contrato", "Declaração não incidência", "Declaração Hipossuficiência", "Termo de Risco", "Revogação"];
-      setGeneratingDoc("Pacote Completo");
-      for (const tipo of tipos) {
-        await downloadSingleDoc(tipo, clienteData);
+    if (name === "Gerar Todos") {
+      setGeneratingDoc("Gerar Todos");
+      try {
+        const res = await fetch("/api/zapsign/gerar-todos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cliente: clienteData, clienteId: clientId ? parseInt(clientId) : undefined }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ mensagem: "Erro" }));
+          toast({ title: "Erro", description: (err as any).mensagem || "Erro ao gerar documentos", variant: "destructive" });
+        } else {
+          const data = await res.json();
+          if (data.parcial) {
+            toast({ title: "Atenção", description: data.mensagem || "Alguns documentos não puderam ser gerados." });
+          } else {
+            toast({ title: "Sucesso", description: "Todos os documentos foram gerados e enviados para assinatura digital." });
+          }
+          await fetchZapsignDocs(clienteData.cpf);
+        }
+      } catch {
+        toast({ title: "Erro", description: "Erro ao conectar com o servidor", variant: "destructive" });
       }
       setGeneratingDoc(null);
-      toast({ title: "Pacote Completo", description: "Todos os documentos foram gerados." });
       return;
     }
 
     setGeneratingDoc(name);
-    await downloadSingleDoc(name, clienteData);
+    try {
+      const res = await fetch("/api/zapsign/gerar-e-enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: name, cliente: clienteData, clienteId: clientId ? parseInt(clientId) : undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ mensagem: "Erro" }));
+        toast({ title: "Erro", description: (err as any).mensagem || "Erro ao gerar documento", variant: "destructive" });
+      } else {
+        toast({ title: "Documento Gerado", description: `${name} enviado para assinatura digital.` });
+        await fetchZapsignDocs(clienteData.cpf);
+      }
+    } catch {
+      toast({ title: "Erro", description: "Erro ao conectar com o servidor", variant: "destructive" });
+    }
     setGeneratingDoc(null);
   };
 
-  const downloadSingleDoc = async (tipo: string, clienteData: ReturnType<typeof getClienteDocData>) => {
+  const handleAssinar = async (doc: any) => {
     try {
+      const res = await fetch(`/api/zapsign/assinar/${doc.id}`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          window.open(data.url, "_blank");
+        }
+      } else {
+        toast({ title: "Erro", description: "Não foi possível obter link de assinatura", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Erro", description: "Erro ao conectar", variant: "destructive" });
+    }
+  };
+
+  const handleAssinarTodos = async () => {
+    const pendentes = zapsignDocs.filter(d => d.statusAssinatura === "pendente");
+    if (pendentes.length === 0) return;
+    setSigningAll(true);
+    for (const doc of pendentes) {
+      await handleAssinar(doc);
+    }
+    setSigningAll(false);
+  };
+
+  const handleDeleteZapDoc = async (id: number) => {
+    try {
+      const res = await fetch(`/api/zapsign/documento/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setZapsignDocs(prev => prev.filter(d => d.id !== id));
+        toast({ title: "Removido", description: "Documento removido." });
+      }
+    } catch {
+      toast({ title: "Erro", description: "Erro ao remover", variant: "destructive" });
+    }
+  };
+
+  const handleDownloadOriginal = async (doc: any) => {
+    if (doc.urlPdfOriginal) {
+      window.open(doc.urlPdfOriginal, "_blank");
+    } else {
+      const clienteData = getClienteDocData();
       const res = await fetch("/api/documentos/gerar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo, cliente: clienteData }),
+        body: JSON.stringify({ tipo: doc.tipoDocumento, cliente: clienteData }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ mensagem: "Erro desconhecido" }));
-        toast({ title: "Erro", description: (err as { mensagem?: string }).mensagem || "Erro ao gerar documento", variant: "destructive" });
-        return;
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = doc.nomeArquivo;
+        a.click();
+        URL.revokeObjectURL(url);
       }
-      const blob = await res.blob();
-      const disposition = res.headers.get("content-disposition") || "";
-      const match = disposition.match(/filename="?([^";\s]+)"?/);
-      const fileName = match?.[1] || `${tipo.replace(/\s+/g, "_")}.pdf`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
-      setGeneratedDocs(prev => [{ name: tipo, date: new Date() }, ...prev]);
-      toast({ title: "Documento Gerado", description: `${tipo} baixado com sucesso.` });
-    } catch {
-      toast({ title: "Erro", description: "Erro ao conectar com o servidor", variant: "destructive" });
+    }
+  };
+
+  const handleDownloadSigned = (doc: any) => {
+    if (doc.urlPdfAssinado || doc.signedFile) {
+      window.open(doc.urlPdfAssinado || doc.signedFile, "_blank");
+    }
+  };
+
+  const handleRefreshStatus = async () => {
+    const cpf = getValues("cpf");
+    if (!cpf) return;
+    setLoadingZapDocs(true);
+    try {
+      await fetch(`/api/zapsign/atualizar-status/${cpf.replace(/\D/g, "")}`, { method: "POST" });
+      await fetchZapsignDocs(cpf);
+    } catch {} finally {
+      setLoadingZapDocs(false);
     }
   };
 
@@ -1256,40 +1359,130 @@ export default function ClientForm() {
           {activeTab === "documentos" && (isEditing || promarkosPreloaded) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               
-              {/* Documentos Digitais */}
+              {/* Gerar documentos padrão */}
               <div className="bg-card p-6 md:p-8 rounded-2xl shadow-sm border border-border/50">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-primary" /> Gerar Documentos Digitais
-                  </h2>
-                  <button type="button" disabled={!!generatingDoc} onClick={() => generateDoc("Pacote Completo")} className="px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50 flex items-center gap-2">
-                    {generatingDoc === "Pacote Completo" && <Loader2 className="w-4 h-4 animate-spin" />}
+                <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-primary" /> Gerar documentos padrão
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  {["Procuração Extra", "Contrato", "Declaração não incidência", "Declaração Hipossuficiência", "Termo de Risco", "Revogação"].map(doc => (
+                    <button
+                      type="button"
+                      key={doc}
+                      disabled={!!generatingDoc}
+                      onClick={() => generateDoc(doc)}
+                      className="px-4 py-2 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {generatingDoc === doc ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus2 className="w-4 h-4" />}
+                      {doc === "Declaração não incidência" ? "Decl. não incidência" : doc === "Declaração Hipossuficiência" ? "Decl. Hipossuficiência" : doc === "Revogação" ? "Revogação procuração" : doc}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={!!generatingDoc}
+                    onClick={() => generateDoc("Gerar Todos")}
+                    className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors text-sm font-bold flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {generatingDoc === "Gerar Todos" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FilePlus2 className="w-4 h-4" />}
                     Gerar Todos
                   </button>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {["Procuração Extra", "Contrato", "Declaração não incidência", "Declaração Hipossuficiência", "Termo de Risco", "Revogação"].map(doc => (
-                    <button type="button" key={doc} disabled={!!generatingDoc} onClick={() => generateDoc(doc)} className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/40 transition-all font-semibold flex flex-col items-center justify-center gap-2 text-center h-24 disabled:opacity-50">
-                      {generatingDoc === doc ? <Loader2 className="w-6 h-6 animate-spin" /> : <FilePlus2 className="w-6 h-6" />}
-                      <span className="text-sm leading-tight">{doc}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {generatedDocs.length > 0 && (
-                  <div className="mt-8 border-t border-border/50 pt-6">
-                    <h3 className="font-bold mb-4">Documentos Gerados Recentemente</h3>
-                    <div className="space-y-2">
-                      {generatedDocs.map((doc, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                          <span className="font-medium text-sm">{doc.name}</span>
-                          <span className="text-xs text-muted-foreground">{doc.date.toLocaleTimeString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
+
+              {/* Documentos pendentes de assinatura */}
+              {(() => {
+                const pendentes = zapsignDocs.filter(d => d.statusAssinatura === "pendente");
+                const assinados = zapsignDocs.filter(d => d.statusAssinatura === "assinado");
+                return (
+                  <>
+                    {pendentes.length > 0 && (
+                      <div className="bg-card p-6 md:p-8 rounded-2xl shadow-sm border-2 border-orange-300">
+                        <div className="flex justify-between items-center mb-4">
+                          <div className="flex items-center gap-3">
+                            <span className="text-orange-600 font-bold text-sm">{pendentes.length} documento{pendentes.length > 1 ? "s" : ""} pendente{pendentes.length > 1 ? "s" : ""} de assinatura</span>
+                            <button type="button" onClick={handleRefreshStatus} disabled={loadingZapDocs} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors" title="Atualizar status">
+                              <RefreshCw className={cn("w-4 h-4", loadingZapDocs && "animate-spin")} />
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={signingAll}
+                            onClick={handleAssinarTodos}
+                            className="px-4 py-2 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors text-sm flex items-center gap-2 disabled:opacity-50"
+                          >
+                            {signingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                            Assinar todos
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {pendentes.map(doc => (
+                            <div key={doc.id} className="border-2 border-orange-300 rounded-xl bg-orange-50 overflow-hidden">
+                              <div className="p-3">
+                                <p className="text-sm font-semibold text-gray-800 truncate" title={doc.nomeArquivo}>{doc.nomeArquivo}</p>
+                                <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold bg-green-500 text-white">Pendente</span>
+                              </div>
+                              <div className="px-3 pb-3 flex items-center gap-1">
+                                <button type="button" onClick={() => handleDownloadOriginal(doc)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Visualizar">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                </button>
+                                <button type="button" onClick={() => handleDownloadOriginal(doc)} className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors" title="Baixar">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                </button>
+                                <button type="button" onClick={() => handleAssinar(doc)} className="p-2 text-orange-600 hover:text-orange-700 hover:bg-orange-100 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold" title="Assinar">
+                                  <ExternalLink className="w-4 h-4" />
+                                  <span>Assinar</span>
+                                </button>
+                                <button type="button" onClick={() => handleDeleteZapDoc(doc.id)} className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-auto" title="Excluir">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {assinados.length > 0 && (
+                      <div className="bg-card p-6 md:p-8 rounded-2xl shadow-sm border-2 border-green-300">
+                        <h3 className="text-green-700 font-bold text-sm mb-4 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4" />
+                          {assinados.length} documento{assinados.length > 1 ? "s" : ""} assinado{assinados.length > 1 ? "s" : ""}
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {assinados.map(doc => (
+                            <div key={doc.id} className="border border-green-300 rounded-xl bg-green-50 overflow-hidden">
+                              <div className="p-3">
+                                <p className="text-sm font-semibold text-gray-800 truncate" title={doc.nomeArquivo}>{doc.nomeArquivo}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="inline-block px-2 py-0.5 rounded text-xs font-bold bg-blue-600 text-white">Assinado</span>
+                                  {doc.dataAssinatura && <span className="text-xs text-muted-foreground">{new Date(doc.dataAssinatura).toLocaleDateString("pt-BR")}</span>}
+                                </div>
+                              </div>
+                              <div className="px-3 pb-3 flex items-center gap-1">
+                                <button type="button" onClick={() => handleDownloadSigned(doc)} className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors" title="Baixar assinado">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                </button>
+                                <button type="button" onClick={() => handleDownloadOriginal(doc)} className="p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors" title="Baixar original">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                </button>
+                                <button type="button" onClick={() => handleDeleteZapDoc(doc.id)} className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-auto" title="Excluir">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {loadingZapDocs && zapsignDocs.length === 0 && (
+                      <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin" /> Carregando documentos...
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Anexos */}
               <div className="bg-card p-6 md:p-8 rounded-2xl shadow-sm border border-border/50">

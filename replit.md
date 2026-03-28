@@ -13,8 +13,9 @@ Sistema complementar de cadastro de clientes para o escritório Mendes Advocacia
 - **Cadastro completo** com todos os campos (dados pessoais, contato, endereço)
 - **CEP automático** via ViaCEP
 - **Processos/Pastas**: cadastro com número, fluxo, estágio, benefício, fato gerador, etc.
-- **Documentos digitais** e **anexos** de documentos
-- **Pasta local do cliente**: campo para salvar e copiar o caminho da pasta
+- **Documentos digitais** com integração **ZapSign** para assinatura digital
+- **ZapSign**: gera PDFs (Procuração, Contrato, Declarações, Termo de Risco, Revogação) e envia ao ZapSign para assinatura digital; cards com status "Pendente"/"Assinado", botões visualizar/baixar/assinar/excluir, "Assinar Todos", webhook para atualização automática de status
+- **Anexos** de documentos
 
 ---
 
