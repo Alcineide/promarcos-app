@@ -19,7 +19,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ScanQueueProvider } from "@/contexts/ScanQueue";
 import { NetworkProvider } from "@/lib/network";
 import { startAuditSync } from "@/lib/audit-sync";
-import { startAutoSync } from "@/lib/upload-sync";
+import { startAutoSync, triggerSync } from "@/lib/upload-sync";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -64,6 +64,7 @@ export default function RootLayout() {
   useEffect(() => {
     startAuditSync();
     startAutoSync();
+    setTimeout(() => triggerSync(), 2000);
   }, []);
 
   if (!fontsLoaded && !fontError) return null;

@@ -221,7 +221,7 @@ export default function GaleriaScreen() {
     markForRetry(doc.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isOnline) {
-      triggerSync();
+      setTimeout(() => triggerSync(), 300);
     }
   }
 
