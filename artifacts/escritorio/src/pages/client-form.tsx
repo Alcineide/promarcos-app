@@ -220,7 +220,15 @@ export default function ClientForm() {
           setValue("nomeCompleto", p.razao_social || "");
           setValue("dataNascimento", nascFormatted);
           setValue("sexo", sexoLabel);
-          setValue("estadoCivil", p.estado_civil || "");
+          const ecRaw = (p.estado_civil || "").trim();
+          const ecMap: Record<string, string> = {
+            "Solteiro": "Solteiro", "Solteiro(a)": "Solteiro", "solteiro": "Solteiro",
+            "Casado": "Casado", "Casado(a)": "Casado", "casado": "Casado",
+            "Divorciado": "Divorciado", "Divorciado(a)": "Divorciado", "divorciado": "Divorciado",
+            "Viúvo": "Viúvo", "Viúvo(a)": "Viúvo", "viúvo": "Viúvo", "Viuvo": "Viúvo", "Viuvo(a)": "Viúvo",
+            "União Estável": "União Estável", "União estável": "União Estável", "união estável": "União Estável", "Uniao Estavel": "União Estável",
+          };
+          setValue("estadoCivil", ecMap[ecRaw] || ecRaw);
           setValue("rgRepresentante", p.rg || "");
           setValue("orgaoEmissor", p.orgaoemissor || "");
           setValue("profissao", p.profissao || "");
@@ -233,7 +241,17 @@ export default function ClientForm() {
           setValue("complemento", p.complemento || "");
           setValue("bairro", p.bairro || "");
           setValue("cidade", p.cidade || "");
-          setValue("estado", p.estado || "");
+          const estadoMap: Record<string, string> = {
+            "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM", "Bahia": "BA",
+            "Ceará": "CE", "Distrito Federal": "DF", "Espírito Santo": "ES", "Goiás": "GO",
+            "Maranhão": "MA", "Mato Grosso": "MT", "Mato Grosso do Sul": "MS", "Minas Gerais": "MG",
+            "Pará": "PA", "Paraíba": "PB", "Paraná": "PR", "Pernambuco": "PE", "Piauí": "PI",
+            "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN", "Rio Grande do Sul": "RS",
+            "Rondônia": "RO", "Roraima": "RR", "Santa Catarina": "SC", "São Paulo": "SP",
+            "Sergipe": "SE", "Tocantins": "TO",
+          };
+          const ufRaw = (p.estado || "").trim();
+          setValue("estado", estadoMap[ufRaw] || ufRaw);
           setPromarkosPreloaded(true);
         } else {
           setValue("cpf", formatCPF(cpfFromUrl));
