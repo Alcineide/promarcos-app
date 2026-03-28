@@ -98,30 +98,30 @@ async function automacaoPjeTrf1(page: import("puppeteer-core").Page, cpf: string
 
   await new Promise(r => setTimeout(r, 2000));
 
-  const cpfRadio = await page.$('input[type="radio"][value="CPF"], input[id$="cpfRadio"], label:has-text("CPF")');
-  if (cpfRadio) {
-    await cpfRadio.click();
-    await new Promise(r => setTimeout(r, 500));
-  } else {
-    await page.evaluate(() => {
-      const radios = document.querySelectorAll('input[type="radio"]');
-      for (const r of radios) {
-        const label = r.parentElement?.textContent || "";
-        if (/\bCPF\b/.test(label) && !/CNPJ/.test(label)) {
-          (r as HTMLInputElement).click();
-          return;
-        }
+  await page.evaluate(() => {
+    const radios = document.querySelectorAll('input[type="radio"]');
+    for (const r of radios) {
+      const radio = r as HTMLInputElement;
+      if (radio.value === "CPF") {
+        radio.click();
+        return;
       }
-      const labels = document.querySelectorAll('label');
-      for (const l of labels) {
-        if (/\bCPF\b/.test(l.textContent || "") && !/CNPJ/.test(l.textContent || "")) {
-          l.click();
-          return;
-        }
+      const label = radio.parentElement?.textContent || "";
+      const forLabel = radio.id ? document.querySelector(`label[for="${radio.id}"]`)?.textContent || "" : "";
+      if (/\bCPF\b/.test(label) || /\bCPF\b/.test(forLabel)) {
+        radio.click();
+        return;
       }
-    });
-    await new Promise(r => setTimeout(r, 500));
-  }
+    }
+    const labels = document.querySelectorAll('label');
+    for (const l of labels) {
+      if (/\bCPF\b/.test(l.textContent || "") && !/CNPJ/.test(l.textContent || "")) {
+        l.click();
+        return;
+      }
+    }
+  });
+  await new Promise(r => setTimeout(r, 500));
 
   await page.evaluate((cpfDots: string, cpfNums: string) => {
     const selectors = [
