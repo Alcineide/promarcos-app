@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ScanQueueProvider } from "@/contexts/ScanQueue";
+import { startAuditSync } from "@/lib/audit-sync";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -56,6 +57,10 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  useEffect(() => {
+    startAuditSync();
+  }, []);
 
   if (!fontsLoaded && !fontError) return null;
 

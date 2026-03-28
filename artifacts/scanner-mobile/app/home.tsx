@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiGet } from "@/config/api";
+import { registrarConsulta } from "@/lib/audit-service";
 
 interface PromarcosPessoa {
   codigo: number;
@@ -55,6 +56,9 @@ export default function HomeScreen() {
     }
     setLoading(true);
     setSearched(false);
+    if (user) {
+      registrarConsulta({ email: user.email, codigo: user.codigo }, t);
+    }
     try {
       const data = await apiGet<PromarcosPessoa[]>(
         `/promarcos/buscarsocio/${encodeURIComponent(t)}`

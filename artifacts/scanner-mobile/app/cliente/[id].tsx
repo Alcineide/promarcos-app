@@ -22,6 +22,7 @@ import { apiPost } from "@/config/api";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { QueuedDoc, useScanQueue } from "@/contexts/ScanQueue";
+import { registrarUpload } from "@/lib/audit-service";
 
 const CATEGORIAS = [
   { id: "folha-rosto", label: "Folha de Rosto", icon: "file-text", color: "#6366F1" },
@@ -116,7 +117,7 @@ export default function ClienteScreen() {
   const params = useLocalSearchParams<{ id: string; nome: string; cpf: string }>();
   const { id, nome, cpf } = params;
 
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { queue, removeFromQueue, clearClientQueue } = useScanQueue();
   const clientQueue = queue.filter((d) => d.clienteId === id);
   const totalPages = clientQueue.reduce((acc, d) => acc + d.pages.length, 0);
@@ -191,6 +192,13 @@ export default function ClienteScreen() {
         });
 
         await saveToDevice(pdfUri, pdfFileName, doc.clienteNome);
+        if (user) {
+          registrarUpload(
+            { email: user.email, codigo: user.codigo },
+            doc.clienteNome,
+            doc.categoriaNome
+          );
+        }
         removeFromQueue(doc.id);
         successCount++;
       } catch (err) {
