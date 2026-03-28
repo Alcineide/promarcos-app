@@ -104,6 +104,7 @@ async function buildAll() {
       "fontkit",
       "linebreak",
       "png-js",
+      "pdf-lib",
     ],
     sourcemap: "linked",
     plugins: [

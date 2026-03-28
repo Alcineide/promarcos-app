@@ -104,23 +104,34 @@ export default function PesquisaCpf() {
     setPesquisando(false);
   }, [cpf, dataNascimento]);
 
+  function getSiteKey(label: string): string | null {
+    const consulta = CONSULTAS.find(c => c.label === label);
+    if (!consulta) return null;
+    if (consulta.key === "local" || consulta.key === "promarcos") return null;
+    return consulta.key;
+  }
+
   async function handleBaixarPdf(index: number) {
     const r = resultados[index];
     setResultados((prev) => prev.map((item, i) => i === index ? { ...item, baixando: true } : item));
     try {
-      const res = await fetch("/api/pesquisa/gerar-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cpf,
-          dataNascimento,
-          nomeMae,
-          nomePai,
-          local: r.local,
-          mensagem: r.mensagem,
-          dados: r.dados,
-        }),
-      });
+      const siteKey = getSiteKey(r.local);
+      let res: Response;
+
+      if (siteKey) {
+        res = await fetch("/api/pesquisa/capturar-pagina", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ siteKey, cpf: cpf.replace(/\D/g, "") }),
+        });
+      } else {
+        res = await fetch("/api/pesquisa/gerar-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cpf, dataNascimento, nomeMae, nomePai, local: r.local, mensagem: r.mensagem, dados: r.dados }),
+        });
+      }
+
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -142,23 +153,22 @@ export default function PesquisaCpf() {
     if (resultados.length === 0) return;
     setBaixandoTodos(true);
     try {
-      const res = await fetch("/api/pesquisa/gerar-pdf-completo", {
+      const siteKeys = resultados
+        .map(r => getSiteKey(r.local))
+        .filter((k): k is string => k !== null);
+
+      const res = await fetch("/api/pesquisa/capturar-todas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cpf,
-          dataNascimento,
-          nomeMae,
-          nomePai,
-          resultados: resultados.map(r => ({ local: r.local, mensagem: r.mensagem, dados: r.dados })),
-        }),
+        body: JSON.stringify({ cpf: cpf.replace(/\D/g, ""), sites: siteKeys }),
       });
+
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `pesquisa_completa_${cpf.replace(/\D/g, "")}.pdf`;
+        a.download = `capturas_completas_${cpf.replace(/\D/g, "")}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
