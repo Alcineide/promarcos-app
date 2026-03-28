@@ -1,24 +1,48 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { Search, UserPlus, ChevronRight, FileText, Briefcase, MapPin, AlertCircle } from "lucide-react";
+import { Search, UserPlus, ChevronRight, FileText, Briefcase, MapPin, AlertCircle, WifiOff } from "lucide-react";
 import { useListClientes } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout";
 import { motion } from "framer-motion";
 import { formatCPF } from "@/lib/utils";
 import { buscarPorCpf, type PromarkosPessoa } from "@/lib/promarcos-api";
 import { cn } from "@/lib/utils";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { cacheSearchResults, getCachedSearchResults } from "@/lib/offline-db";
 
 export default function Home() {
+  const isOnline = useOnlineStatus();
   const [searchTerm, setSearchTerm] = useState("");
   const [promarkosResult, setPromarkosResult] = useState<{ existe: boolean; pessoa?: PromarkosPessoa } | null>(null);
   const [promarkosLoading, setPromarkosLoading] = useState(false);
+  const [cachedClients, setCachedClients] = useState<unknown[] | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const { data: clients, isLoading } = useListClientes({ search: searchTerm });
 
   useEffect(() => {
+    if (clients && clients.length > 0 && searchTerm) {
+      cacheSearchResults(searchTerm, clients).catch(() => {});
+    }
+  }, [clients, searchTerm]);
+
+  useEffect(() => {
+    if (!isOnline && searchTerm) {
+      getCachedSearchResults(searchTerm).then((cached) => {
+        setCachedClients(cached);
+      }).catch(() => setCachedClients(null));
+    } else {
+      setCachedClients(null);
+    }
+  }, [isOnline, searchTerm]);
+
+  useEffect(() => {
     const digits = searchTerm.replace(/\D/g, "");
     if (digits.length !== 11) {
+      setPromarkosResult(null);
+      return;
+    }
+    if (!navigator.onLine) {
       setPromarkosResult(null);
       return;
     }
@@ -130,18 +154,25 @@ export default function Home() {
           )}
         </div>
 
+        {!isOnline && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm">
+            <WifiOff className="w-4 h-4 flex-shrink-0" />
+            <span>Você está offline. A busca no Promarcos está indisponível. {cachedClients ? "Exibindo resultados em cache." : "Resultados anteriores podem não estar disponíveis."}</span>
+          </div>
+        )}
+
         <div className="space-y-4">
           <h2 className="text-xl font-semibold px-2">
-            {isLoading ? "Buscando..." : `Resultados no sistema local (${clients?.length || 0})`}
+            {isLoading ? "Buscando..." : `Resultados no sistema local (${(isOnline ? clients : cachedClients as any[])?.length || 0})`}
           </h2>
 
-          {isLoading ? (
+          {isLoading && isOnline ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3].map(i => (
                 <div key={i} className="bg-card rounded-2xl p-6 h-32 animate-pulse border border-border/50" />
               ))}
             </div>
-          ) : clients?.length === 0 ? (
+          ) : (isOnline ? clients : cachedClients as any[])?.length === 0 || (!isOnline && !cachedClients) ? (
             <div className="bg-card rounded-3xl p-12 text-center border border-border/50 shadow-sm flex flex-col items-center">
               <div className="w-20 h-20 bg-primary/5 rounded-full flex items-center justify-center mb-6">
                 <Search className="w-10 h-10 text-primary/40" />
@@ -159,7 +190,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {clients?.map((client, index) => (
+              {((isOnline ? clients : cachedClients) as any[])?.map((client: any, index: number) => (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}

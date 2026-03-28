@@ -10,6 +10,8 @@ import PesquisaCpf from "./pages/pesquisa-cpf";
 import LoginPage from "./pages/login";
 import { Redirect } from "wouter";
 import { AuthProvider, useAuth } from "./lib/auth-context";
+import { SyncQueueProvider } from "./lib/sync-context";
+import { OfflineBanner } from "./components/OfflineBanner";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,10 +54,13 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <ProtectedRoutes />
-          </WouterRouter>
-          <Toaster />
+          <SyncQueueProvider>
+            <OfflineBanner />
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <ProtectedRoutes />
+            </WouterRouter>
+            <Toaster />
+          </SyncQueueProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

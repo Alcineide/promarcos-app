@@ -7,8 +7,11 @@ import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarB
 import { 
   User, Phone, MapPin, FileText, FolderOpen, Save, 
   ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase, Loader2, RefreshCw, ExternalLink,
-  Camera, ImageIcon, X, Upload, CheckCircle
+  Camera, ImageIcon, X, Upload, CheckCircle, WifiOff
 } from "lucide-react";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import { useSyncQueue } from "@/lib/sync-context";
+import { addPendingSubmission } from "@/lib/offline-db";
 import { motion, AnimatePresence } from "framer-motion";
 import { Layout } from "@/components/layout";
 import { FormInput } from "@/components/form-input";
@@ -65,6 +68,9 @@ export default function ClientForm() {
   const clientId = parseInt(id || "0");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const isOnline = useOnlineStatus();
+  const { refreshQueue } = useSyncQueue();
 
   const [activeTab, setActiveTab] = useState<"cadastro" | "processos" | "documentos">("cadastro");
   const [scannerModal, setScannerModal] = useState<{ tipo: string; tipoSlug: string } | null>(null);
@@ -326,6 +332,10 @@ export default function ClientForm() {
   useEffect(() => {
     const rawCep = cepValue?.replace(/\D/g, "") || "";
     if (rawCep.length === 8) {
+      if (!navigator.onLine) {
+        toast({ title: "Sem conexão", description: "O preenchimento automático do CEP requer internet." });
+        return;
+      }
       fetch(`https://viacep.com.br/ws/${rawCep}/json/`)
         .then(res => res.json())
         .then(data => {
@@ -336,14 +346,33 @@ export default function ClientForm() {
             setValue("estado", data.uf);
             toast({ title: "Endereço preenchido!", description: "Dados do CEP carregados com sucesso." });
           }
-        });
+        })
+        .catch(() => {});
     }
   }, [cepValue, setValue, toast]);
 
   // --- Handlers ---
   const onSubmit = async (data: ClientFormData) => {
+    if (!isOnline && !isEditing) {
+      try {
+        const dataWithPromarcos = { ...data, promarcosCodigo: promarcosCodigo ?? undefined };
+        await addPendingSubmission(dataWithPromarcos as Record<string, unknown>);
+        await refreshQueue();
+        toast({ title: "Salvo offline", description: "Os dados serão enviados automaticamente quando a conexão retornar." });
+        reset();
+        return;
+      } catch {
+        toast({ title: "Erro", description: "Não foi possível salvar localmente.", variant: "destructive" });
+        return;
+      }
+    }
+
+    if (!isOnline && isEditing) {
+      toast({ title: "Sem conexão", description: "A edição de clientes requer conexão com a internet.", variant: "destructive" });
+      return;
+    }
+
     try {
-      // Parse data de nascimento DD/MM/AAAA → ISO
       let nascimentoISO: string | null = null;
       if (data.dataNascimento) {
         const parts = data.dataNascimento.split("/");
@@ -354,7 +383,6 @@ export default function ClientForm() {
         }
       }
 
-      // Save to Promarcos API
       const promarkosPayload = {
         Pessoa: {
           razao_social: data.nomeCompleto,
@@ -382,7 +410,6 @@ export default function ClientForm() {
         Processos: [],
       };
 
-      // Fill estadoId based on UF abbreviation (known from buscarcpf result or ViaCEP)
       if (cpfCheckResult?.existe && cpfCheckResult.pessoa?.estadoId) {
         promarkosPayload.Pessoa.estadoId = cpfCheckResult.pessoa.estadoId;
         promarkosPayload.Pessoa.cidadeId = cpfCheckResult.pessoa.cidadeId;
@@ -480,6 +507,10 @@ export default function ClientForm() {
   }, [promarkosPreloaded, isEditing]);
 
   const generateDoc = async (name: string) => {
+    if (!isOnline) {
+      toast({ title: "Requer internet", description: "A geração de documentos e assinatura digital requer conexão com a internet.", variant: "destructive" });
+      return;
+    }
     const clienteData = getClienteDocData();
     if (!clienteData.nomeCompleto || !clienteData.cpf) {
       toast({ title: "Erro", description: "Preencha os dados do cliente antes de gerar documentos.", variant: "destructive" });
@@ -534,6 +565,10 @@ export default function ClientForm() {
   };
 
   const handleAssinar = async (doc: any) => {
+    if (!isOnline) {
+      toast({ title: "Requer internet", description: "A assinatura digital requer conexão com a internet.", variant: "destructive" });
+      return;
+    }
     if (doc.urlAssinatura) {
       window.open(doc.urlAssinatura, "_blank");
       return;
@@ -923,6 +958,10 @@ export default function ClientForm() {
   };
 
   const handleFileUpload = (tipo: string) => {
+    if (!isOnline) {
+      toast({ title: "Requer internet", description: "O upload de documentos requer conexão com a internet.", variant: "destructive" });
+      return;
+    }
     if (!promarcosCodigo) {
       toast({ title: "Cliente não vinculado", description: "Este cliente não possui vínculo com o Promarcos. Salve o cliente primeiro.", variant: "destructive" });
       return;

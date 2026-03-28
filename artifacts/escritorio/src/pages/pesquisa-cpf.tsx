@@ -1,6 +1,7 @@
 import { Layout } from "@/components/layout";
 import { useState, useCallback } from "react";
 import { PDFDocument } from "pdf-lib";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 
 interface PesquisaResult {
   local: string;
@@ -22,6 +23,7 @@ const CONSULTAS = [
 ];
 
 export default function PesquisaCpf() {
+  const isOnline = useOnlineStatus();
   const [cpf, setCpf] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
   const [resultados, setResultados] = useState<PesquisaResult[]>([]);
@@ -46,6 +48,10 @@ export default function PesquisaCpf() {
   }
 
   const handlePesquisar = useCallback(async () => {
+    if (!navigator.onLine) {
+      setErro("A pesquisa de litispendência requer conexão com a internet.");
+      return;
+    }
     const cpfNumerico = cpf.replace(/\D/g, "");
     if (cpfNumerico.length !== 11) {
       setErro("CPF deve ter 11 dígitos");
