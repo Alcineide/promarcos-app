@@ -12,6 +12,7 @@ export default function PesquisaCpf() {
   const [resultados, setResultados] = useState<PesquisaResult[]>([]);
   const [pesquisando, setPesquisando] = useState(false);
   const [pesquisaFeita, setPesquisaFeita] = useState(false);
+  const [erro, setErro] = useState("");
 
   function formatCpf(value: string) {
     const nums = value.replace(/\D/g, "").slice(0, 11);
@@ -29,13 +30,36 @@ export default function PesquisaCpf() {
   }
 
   async function handlePesquisar() {
-    if (!cpf.trim()) return;
+    const cpfNumerico = cpf.replace(/\D/g, "");
+    if (cpfNumerico.length !== 11) {
+      setErro("CPF deve ter 11 dígitos");
+      return;
+    }
     setPesquisando(true);
     setPesquisaFeita(false);
-    await new Promise((r) => setTimeout(r, 1200));
+    setErro("");
     setResultados([]);
-    setPesquisaFeita(true);
-    setPesquisando(false);
+
+    try {
+      const res = await fetch(`/api/pesquisa-cpf/${cpfNumerico}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Erro ao pesquisar");
+      }
+      const data: PesquisaResult[] = await res.json();
+      setResultados(data);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao pesquisar CPF");
+    } finally {
+      setPesquisaFeita(true);
+      setPesquisando(false);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") {
+      handlePesquisar();
+    }
   }
 
   return (
@@ -66,6 +90,7 @@ export default function PesquisaCpf() {
                     type="text"
                     value={cpf}
                     onChange={(e) => setCpf(formatCpf(e.target.value))}
+                    onKeyDown={handleKeyDown}
                     placeholder="000.000.000-00"
                     className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-green-500/50 focus:border-green-500/50"
                   />
@@ -77,10 +102,15 @@ export default function PesquisaCpf() {
                     type="text"
                     value={dataNascimento}
                     onChange={(e) => setDataNascimento(formatDate(e.target.value))}
+                    onKeyDown={handleKeyDown}
                     placeholder="dd/mm/aaaa"
                     className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-green-500/50 focus:border-green-500/50"
                   />
                 </div>
+
+                {erro && (
+                  <p className="text-xs text-red-400">{erro}</p>
+                )}
 
                 <button
                   onClick={handlePesquisar}
@@ -112,11 +142,11 @@ export default function PesquisaCpf() {
                 </div>
               </div>
 
-              <div className="min-h-[200px]">
+              <div className="min-h-[200px] max-h-[500px] overflow-y-auto">
                 {resultados.length > 0 ? (
                   resultados.map((r, i) => (
                     <div key={i} className="grid grid-cols-[1fr_2fr] border-b border-border last:border-b-0">
-                      <div className="px-4 py-3 text-sm text-foreground border-r border-border">{r.local}</div>
+                      <div className="px-4 py-3 text-sm text-foreground border-r border-border font-medium">{r.local}</div>
                       <div className="px-4 py-3 text-sm text-muted-foreground">{r.mensagem}</div>
                     </div>
                   ))
