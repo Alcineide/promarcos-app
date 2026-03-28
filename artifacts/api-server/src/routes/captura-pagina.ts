@@ -148,8 +148,27 @@ async function automacaoPjeTrf1(page: import("puppeteer-core").Page, cpf: string
   await new Promise(r => setTimeout(r, 1000));
 }
 
+async function waitForCloudflare(page: import("puppeteer-core").Page): Promise<boolean> {
+  const maxWait = 20000;
+  const start = Date.now();
+  while (Date.now() - start < maxWait) {
+    const isChallenge = await page.evaluate(() => {
+      const body = document.body?.innerText || "";
+      return body.includes("Verify you are human") ||
+             body.includes("Performing security verification") ||
+             body.includes("Just a moment") ||
+             !!document.querySelector('#challenge-running, #challenge-stage, .cf-browser-verification');
+    });
+    if (!isChallenge) return true;
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return false;
+}
+
 async function automacaoTrf1Processual(page: import("puppeteer-core").Page, cpf: string): Promise<void> {
-  await page.waitForSelector('input[name="txtCPFCNPJ"], input[name="numCPF"], input[name="cpfCnpj"], #txtCPFCNPJ', { timeout: 10000 }).catch(() => null);
+  await waitForCloudflare(page);
+
+  await page.waitForSelector('input[name="txtCPFCNPJ"], input[name="numCPF"], input[name="cpfCnpj"], #txtCPFCNPJ', { timeout: 15000 }).catch(() => null);
 
   const cpfFormatado = formatCpfDots(cpf);
 

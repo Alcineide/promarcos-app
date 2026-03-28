@@ -1,5 +1,6 @@
 import { Layout } from "@/components/layout";
 import { useState, useCallback } from "react";
+import { PDFDocument } from "pdf-lib";
 
 interface PesquisaResult {
   local: string;
@@ -151,24 +152,47 @@ export default function PesquisaCpf() {
 
   const [baixandoTodos, setBaixandoTodos] = useState(false);
 
-  function handleBaixarTodos() {
+  async function handleBaixarTodos() {
     if (resultados.length === 0) return;
     setErroPdf("");
+    setBaixandoTodos(true);
 
     const comPdf = resultados.filter(r => r.pdfBase64);
     if (comPdf.length === 0) {
       setErroPdf("Nenhuma captura disponível para download.");
+      setBaixandoTodos(false);
       return;
     }
 
-    for (const r of comPdf) {
-      const byteChars = atob(r.pdfBase64!);
-      const byteNumbers = new Uint8Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) {
-        byteNumbers[i] = byteChars.charCodeAt(i);
+    try {
+      const mergedPdf = await PDFDocument.create();
+
+      for (const r of comPdf) {
+        const byteChars = atob(r.pdfBase64!);
+        const byteNumbers = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteNumbers[i] = byteChars.charCodeAt(i);
+        }
+
+        try {
+          const srcDoc = await PDFDocument.load(byteNumbers);
+          const pages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
+          for (const pg of pages) {
+            mergedPdf.addPage(pg);
+          }
+        } catch {
+          console.warn(`Falha ao processar PDF de ${r.local}`);
+        }
       }
-      const blob = new Blob([byteNumbers], { type: "application/pdf" });
-      downloadBlob(blob, `pesquisa_${r.local.replace(/[^a-zA-Z0-9]/g, "_")}_${cpf.replace(/\D/g, "")}.pdf`);
+
+      const mergedBytes = await mergedPdf.save();
+      const blob = new Blob([mergedBytes], { type: "application/pdf" });
+      const cpfNumerico = cpf.replace(/\D/g, "");
+      downloadBlob(blob, `pesquisa_completa_${cpfNumerico}.pdf`);
+    } catch {
+      setErroPdf("Erro ao juntar os PDFs.");
+    } finally {
+      setBaixandoTodos(false);
     }
   }
 
@@ -397,7 +421,7 @@ export default function PesquisaCpf() {
                       <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
                       <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
                     </svg>
-                    {baixandoTodos ? "Capturando páginas... aguarde" : "Baixar Todos em PDF"}
+                    {baixandoTodos ? "Juntando PDFs... aguarde" : "Baixar Todos em PDF Único"}
                   </button>
                 </div>
               )}

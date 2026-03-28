@@ -229,6 +229,10 @@ importers:
         version: 3.1.0
 
   artifacts/escritorio:
+    dependencies:
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
