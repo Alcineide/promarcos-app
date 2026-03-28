@@ -275,7 +275,7 @@ router.get("/pesquisa-cpf/promarcos/:cpf", async (req, res) => {
   }
 });
 
-const PESQUISA_SOURCES = ["dap", "caf", "incra", "cnis", "ctps", "tribunal", "provas", "receita", "detran", "jusbrasil", "inss"] as const;
+const PESQUISA_SOURCES = ["dap", "caf", "incra", "cnis", "ctps", "tribunal", "provas", "receita", "detran", "jusbrasil", "inss", "sncr", "sigef", "registro_rural", "pesqbrasil", "sisrgp", "cnd_to", "contag", "pje_trf1", "trf1_secao_to"] as const;
 
 for (const source of PESQUISA_SOURCES) {
   router.get(`/pesquisa-cpf/${source}/:cpf`, async (req, res) => {
