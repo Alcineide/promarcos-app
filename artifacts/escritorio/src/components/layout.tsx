@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
-import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt, FileSearch, Download } from "lucide-react";
+import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt, FileSearch, Download, Power } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
 
 const internalNavItems = [
   { href: "/novo", label: "Novo Cliente", icon: Users },
@@ -33,6 +34,7 @@ const frotaItems = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row w-full">
@@ -163,17 +165,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
             Baixar Projeto
           </a>
           <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-white/[0.03]">
-            <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#4a7aab]/20 flex items-center justify-center">
-              <img
-                src="/logo-promarcos.png"
-                alt="Mendes"
-                className="w-full h-full object-cover"
-              />
+            <div className="w-8 h-8 rounded-lg bg-[#4a7aab]/30 flex items-center justify-center text-white/80 font-bold text-xs">
+              {user?.nome?.charAt(0)?.toUpperCase() || "U"}
             </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold text-white/80">Promarcos</span>
-              <span className="text-[10px] text-white/35">Clientes</span>
+            <div className="flex-1 min-w-0 flex flex-col">
+              <span className="text-xs font-semibold text-white/80 truncate">{user?.nome || "Usuário"}</span>
+              <span className="text-[10px] text-white/35 truncate">{user?.email || ""}</span>
             </div>
+            <button
+              onClick={logout}
+              title="Sair"
+              className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <Power className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </aside>
