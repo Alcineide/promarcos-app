@@ -136,6 +136,38 @@ export default function PesquisaCpf() {
     setResultados((prev) => prev.map((item, i) => i === index ? { ...item, baixando: false } : item));
   }
 
+  const [baixandoTodos, setBaixandoTodos] = useState(false);
+
+  async function handleBaixarTodos() {
+    if (resultados.length === 0) return;
+    setBaixandoTodos(true);
+    try {
+      const res = await fetch("/api/pesquisa/gerar-pdf-completo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cpf,
+          dataNascimento,
+          nomeMae,
+          nomePai,
+          resultados: resultados.map(r => ({ local: r.local, mensagem: r.mensagem, dados: r.dados })),
+        }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `pesquisa_completa_${cpf.replace(/\D/g, "")}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch { /* silently fail */ }
+    setBaixandoTodos(false);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter") handlePesquisar();
   }
@@ -340,6 +372,22 @@ export default function PesquisaCpf() {
                   </div>
                 )}
               </div>
+
+              {pesquisaFeita && resultados.length > 0 && (
+                <div className="p-3 border-t border-border bg-muted/20 flex justify-end">
+                  <button
+                    onClick={handleBaixarTodos}
+                    disabled={baixandoTodos}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white text-sm font-bold rounded transition-colors"
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                      <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+                      <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+                    </svg>
+                    {baixandoTodos ? "Gerando..." : "Baixar Todos em PDF"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

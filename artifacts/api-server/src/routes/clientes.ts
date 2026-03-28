@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, clientesTable, processosTable, anexosTable } from "@workspace/db";
 import { eq, or, ilike, sql } from "drizzle-orm";
+import PDFDocument from "pdfkit";
 import {
   CreateClienteBody,
   GetClienteParams,
@@ -308,9 +309,106 @@ for (const source of PESQUISA_SOURCES) {
   });
 }
 
+function printObjToPdf(doc: InstanceType<typeof PDFDocument>, obj: unknown, indent: number = 0): void {
+  if (typeof obj !== "object" || obj === null) {
+    doc.text(String(obj), 50 + indent * 15, undefined, { width: 495 - indent * 15 });
+    return;
+  }
+  if (Array.isArray(obj)) {
+    for (let idx = 0; idx < obj.length; idx++) {
+      doc.text(`[${idx + 1}]`, 50 + indent * 15, undefined, { width: 495 - indent * 15 });
+      printObjToPdf(doc, obj[idx], indent + 1);
+    }
+  } else {
+    for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+      if (typeof val === "object" && val !== null) {
+        doc.text(`${key}:`, 50 + indent * 15, undefined, { width: 495 - indent * 15 });
+        printObjToPdf(doc, val, indent + 1);
+      } else {
+        doc.text(`${key}: ${val ?? ""}`, 50 + indent * 15, undefined, { width: 495 - indent * 15 });
+      }
+    }
+  }
+}
+
+function writeSingleResult(
+  doc: InstanceType<typeof PDFDocument>,
+  cpf: string,
+  dataNascimento: string | undefined,
+  nomeMae: string | undefined,
+  nomePai: string | undefined,
+  local: string,
+  mensagem: string,
+  dados: Record<string, unknown> | undefined,
+  isFirst: boolean
+) {
+  if (!isFirst) {
+    doc.addPage();
+  }
+
+  doc.fillColor("#000000");
+  doc.fontSize(16).font("Helvetica-Bold").text("Relatorio de Pesquisa", 50, 50, { align: "center", width: 495 });
+  doc.fontSize(10).font("Helvetica").text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, 50, 75, { align: "center", width: 495 });
+
+  doc.moveTo(50, 100).lineTo(545, 100).stroke();
+
+  doc.fontSize(12).font("Helvetica-Bold").text("Dados da Pesquisa:", 50, 115);
+  doc.fontSize(10).font("Helvetica");
+  let y = 135;
+  doc.text(`CPF: ${cpf}`, 50, y); y += 15;
+  if (dataNascimento) { doc.text(`Data Nascimento: ${dataNascimento}`, 50, y); y += 15; }
+  if (nomeMae) { doc.text(`Nome da Mae: ${nomeMae}`, 50, y); y += 15; }
+  if (nomePai) { doc.text(`Nome do Pai: ${nomePai}`, 50, y); y += 15; }
+
+  y += 10;
+  doc.moveTo(50, y).lineTo(545, y).stroke();
+  y += 15;
+
+  doc.fontSize(13).font("Helvetica-Bold").text(`Fonte: ${local}`, 50, y);
+  y += 22;
+  doc.fontSize(10).font("Helvetica").text(`Resultado: ${mensagem}`, 50, y);
+  y += 20;
+
+  if (dados && typeof dados === "object" && Object.keys(dados).length > 0) {
+    doc.fontSize(11).font("Helvetica-Bold").text("Dados Retornados:", 50, y);
+    y += 18;
+    doc.fontSize(9).font("Helvetica");
+    doc.y = y;
+    printObjToPdf(doc, dados, 0);
+  }
+
+  const footerY = 770;
+  doc.moveTo(50, footerY).lineTo(545, footerY).stroke();
+  doc.fontSize(8).font("Helvetica").fillColor("#888888")
+    .text("Documento gerado automaticamente pelo sistema Promarcos - Mendes Advocacia", 50, footerY + 8, { align: "center", width: 495 });
+}
+
+async function gerarPdfBuffer(
+  cpf: string,
+  dataNascimento: string | undefined,
+  nomeMae: string | undefined,
+  nomePai: string | undefined,
+  resultados: Array<{ local: string; mensagem: string; dados?: Record<string, unknown> }>
+): Promise<Buffer> {
+  const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true });
+  const chunks: Buffer[] = [];
+
+  return new Promise<Buffer>((resolve, reject) => {
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    for (let i = 0; i < resultados.length; i++) {
+      const r = resultados[i];
+      writeSingleResult(doc, cpf, dataNascimento, nomeMae, nomePai, r.local, r.mensagem, r.dados, i === 0);
+    }
+
+    doc.end();
+  });
+}
+
 router.post("/pesquisa/gerar-pdf", async (req, res) => {
   try {
-    const PDFDocument = (await import("pdfkit")).default;
     const { cpf, dataNascimento, nomeMae, nomePai, local, mensagem, dados } = req.body as {
       cpf: string;
       dataNascimento?: string;
@@ -321,75 +419,7 @@ router.post("/pesquisa/gerar-pdf", async (req, res) => {
       dados?: Record<string, unknown>;
     };
 
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
-    const chunks: Buffer[] = [];
-    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-
-    await new Promise<void>((resolve, reject) => {
-      doc.on("end", resolve);
-      doc.on("error", reject);
-
-      doc.fontSize(18).font("Helvetica-Bold").text("Relatório de Pesquisa", { align: "center" });
-      doc.moveDown(0.5);
-      doc.fontSize(10).font("Helvetica").text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, { align: "center" });
-      doc.moveDown(1);
-
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.5);
-
-      doc.fontSize(12).font("Helvetica-Bold").text("Dados da Pesquisa:");
-      doc.moveDown(0.3);
-      doc.fontSize(10).font("Helvetica");
-      doc.text(`CPF: ${cpf}`);
-      if (dataNascimento) doc.text(`Data Nascimento: ${dataNascimento}`);
-      if (nomeMae) doc.text(`Nome da Mãe: ${nomeMae}`);
-      if (nomePai) doc.text(`Nome do Pai: ${nomePai}`);
-      doc.moveDown(0.5);
-
-      doc.fontSize(12).font("Helvetica-Bold").text(`Fonte: ${local}`);
-      doc.moveDown(0.3);
-      doc.fontSize(10).font("Helvetica").text(`Resultado: ${mensagem}`);
-      doc.moveDown(0.5);
-
-      if (dados && typeof dados === "object" && Object.keys(dados).length > 0) {
-        doc.fontSize(12).font("Helvetica-Bold").text("Dados Retornados:");
-        doc.moveDown(0.3);
-        doc.fontSize(9).font("Helvetica");
-
-        function printObj(obj: unknown, indent: number = 0) {
-          if (typeof obj !== "object" || obj === null) {
-            doc.text(String(obj), { indent: indent * 15 });
-            return;
-          }
-          if (Array.isArray(obj)) {
-            obj.forEach((item, idx) => {
-              doc.text(`[${idx + 1}]`, { indent: indent * 15 });
-              printObj(item, indent + 1);
-            });
-          } else {
-            for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
-              if (typeof val === "object" && val !== null) {
-                doc.text(`${key}:`, { indent: indent * 15 });
-                printObj(val, indent + 1);
-              } else {
-                doc.text(`${key}: ${val ?? ""}`, { indent: indent * 15 });
-              }
-            }
-          }
-        }
-        printObj(dados);
-      }
-
-      doc.moveDown(2);
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.5);
-      doc.fontSize(8).font("Helvetica").fillColor("#888888")
-        .text("Documento gerado automaticamente pelo sistema Promarcos - Mendes Advocacia", { align: "center" });
-
-      doc.end();
-    });
-
-    const pdfBuffer = Buffer.concat(chunks);
+    const pdfBuffer = await gerarPdfBuffer(cpf, dataNascimento, nomeMae, nomePai, [{ local, mensagem, dados }]);
     const safeLocal = local.replace(/[^a-zA-Z0-9]/g, "_");
     const safeCpf = cpf.replace(/\D/g, "");
     res.setHeader("Content-Type", "application/pdf");
@@ -398,6 +428,27 @@ router.post("/pesquisa/gerar-pdf", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Erro ao gerar PDF" });
+  }
+});
+
+router.post("/pesquisa/gerar-pdf-completo", async (req, res) => {
+  try {
+    const { cpf, dataNascimento, nomeMae, nomePai, resultados } = req.body as {
+      cpf: string;
+      dataNascimento?: string;
+      nomeMae?: string;
+      nomePai?: string;
+      resultados: Array<{ local: string; mensagem: string; dados?: Record<string, unknown> }>;
+    };
+
+    const pdfBuffer = await gerarPdfBuffer(cpf, dataNascimento, nomeMae, nomePai, resultados);
+    const safeCpf = cpf.replace(/\D/g, "");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="pesquisa_completa_${safeCpf}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Erro ao gerar PDF completo" });
   }
 });
 
