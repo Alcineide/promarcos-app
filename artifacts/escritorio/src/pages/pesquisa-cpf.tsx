@@ -19,7 +19,6 @@ const CONSULTAS = [
   { key: "trf1_imperatriz", label: "TRF1-IMPERATRIZ", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=MA&subsecao=IMPERATRIZ", descricao: "TRF1 Subseção Imperatriz - Processos Físicos (Antigo)" },
   { key: "trf1_palmas", label: "TRF1-PALMAS", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=PALMAS", descricao: "TRF1 Subseção Palmas - Processos Físicos (Antigo)" },
   { key: "trf1_gurupi", label: "TRF1-GURUPI", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=GURUPI", descricao: "TRF1 Subseção Gurupi - Processos Físicos (Antigo)" },
-  { key: "tse_certidao", label: "TSE-CERTIDÃO ELEITORAL", url: "https://www.tse.jus.br/servicos-eleitorais/autoatendimento-eleitoral#/certidoes-eleitor", descricao: "Certidão de Quitação Eleitoral - TSE" },
 ];
 
 export default function PesquisaCpf() {
@@ -223,7 +222,7 @@ export default function PesquisaCpf() {
     <Layout>
       <div className="max-w-6xl mx-auto py-4">
         <div className="mb-4 text-center">
-          <h2 className="font-display text-xl font-bold text-foreground">7. Pesquisa</h2>
+          <h2 className="font-display text-xl font-bold text-foreground">7. Pesquisa de Litispendência</h2>
         </div>
 
         <div className="bg-card border border-border rounded-lg overflow-hidden">

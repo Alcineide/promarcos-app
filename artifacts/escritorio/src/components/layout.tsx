@@ -150,7 +150,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {/* Divider */}
           <div className="my-4 border-t border-primary-foreground/10" />
 
-          {/* Pesquisa CPF */}
+          {/* Pesquisa Litispendência */}
           <div>
             <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-primary-foreground/30">
               Pesquisa
@@ -167,7 +167,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <FileSearch className={cn("h-5 w-5", location === "/pesquisa-cpf" ? "text-accent" : "text-primary-foreground/50 group-hover:text-primary-foreground/80")} />
-                Pesquisa CPF
+                Pesquisa de Litispendência
               </Link>
             </div>
           </div>

@@ -280,7 +280,7 @@ const PESQUISA_SOURCES = [
   "dap", "caf", "incra", "cnis", "ctps", "tribunal", "provas", "receita", "detran", "jusbrasil", "inss",
   "sncr", "sigef", "registro_rural", "pesqbrasil", "sisrgp", "cnd_to", "contag",
   "pje_trf1", "trf1_secao_to", "trf1_araguaina", "trf1_balsas", "trf1_imperatriz", "trf1_palmas", "trf1_gurupi",
-  "tse_local_votacao", "tse_certidao"
+  "tse_local_votacao"
 ] as const;
 
 for (const source of PESQUISA_SOURCES) {
