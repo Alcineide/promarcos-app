@@ -252,7 +252,7 @@ router.get("/pesquisa-cpf/promarcos/:cpf", async (req, res) => {
     const cpfRaw = req.params.cpf.replace(/\D/g, "");
     const upstream = await fetchWithTimeout(`${PROMARCOS_BASE}/pessoas/buscarcpf/${cpfRaw}`);
     if (!upstream.ok) throw new Error(`HTTP ${upstream.status}`);
-    const data = await upstream.json();
+    const data = await upstream.json() as { existe?: boolean; pessoas?: Record<string, unknown>[] };
     if (data.existe && Array.isArray(data.pessoas) && data.pessoas.length > 0) {
       const detalhes = data.pessoas.map((p: Record<string, unknown>) => ({
         nome: p.razao_social,
@@ -286,16 +286,16 @@ for (const source of PESQUISA_SOURCES) {
       if (!upstream.ok) {
         const contentType = upstream.headers.get("content-type") || "";
         if (contentType.includes("json")) {
-          const data = await upstream.json();
-          const found = data && (data.encontrado === true || data.existe === true || (Array.isArray(data) && data.length > 0));
-          res.json({ local: label, encontrado: found, mensagem: found ? "Dados encontrados para esta consulta" : "Nenhum dado encontrado para esta consulta", dados: data });
+          const data = await upstream.json() as Record<string, unknown>;
+          const found = data && ((data as Record<string, unknown>).encontrado === true || (data as Record<string, unknown>).existe === true || (Array.isArray(data) && data.length > 0));
+          res.json({ local: label, encontrado: !!found, mensagem: found ? "Dados encontrados para esta consulta" : "Nenhum dado encontrado para esta consulta", dados: data });
         } else {
           res.json({ local: label, encontrado: false, mensagem: "Nenhum dado encontrado para esta consulta" });
         }
         return;
       }
-      const data = await upstream.json();
-      const found = data && (data.encontrado === true || data.existe === true || (Array.isArray(data) && data.length > 0) || (typeof data === "object" && Object.keys(data).length > 0));
+      const data = await upstream.json() as Record<string, unknown>;
+      const found = data && ((data as Record<string, unknown>).encontrado === true || (data as Record<string, unknown>).existe === true || (Array.isArray(data) && data.length > 0) || (typeof data === "object" && Object.keys(data).length > 0));
       res.json({ local: label, encontrado: !!found, mensagem: found ? "Dados encontrados para esta consulta" : "Nenhum dado encontrado para esta consulta", dados: data });
     } catch {
       res.json({ local: label, encontrado: false, mensagem: "Serviço temporariamente indisponível" });
