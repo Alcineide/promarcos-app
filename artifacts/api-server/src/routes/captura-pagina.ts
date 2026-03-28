@@ -34,6 +34,51 @@ const SITE_CONFIGS: Record<string, SiteConfig> = {
   tse_certidao: { url: "https://www.tse.jus.br/servicos-eleitorais/certidoes/certidao-de-quitacao-eleitoral" },
 };
 
+function formatCpfDots(cpf: string): string {
+  const nums = cpf.replace(/\D/g, "");
+  if (nums.length !== 11) return nums;
+  return `${nums.slice(0,3)}.${nums.slice(3,6)}.${nums.slice(6,9)}-${nums.slice(9)}`;
+}
+
+async function automacaoPjeTrf1(page: import("puppeteer-core").Page, cpf: string): Promise<void> {
+  await page.waitForSelector('input[id$="pesquisarDocumento:cpfCnpj"]', { timeout: 10000 }).catch(() => null);
+
+  const cpfFormatado = formatCpfDots(cpf);
+
+  await page.evaluate((cpfVal: string) => {
+    const cpfInput = document.querySelector('input[id$="pesquisarDocumento:cpfCnpj"]') as HTMLInputElement | null;
+    if (cpfInput) {
+      cpfInput.value = cpfVal;
+      cpfInput.dispatchEvent(new Event("input", { bubbles: true }));
+      cpfInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }, cpfFormatado);
+
+  await new Promise(r => setTimeout(r, 500));
+
+  const pesquisarBtn = await page.$('input[id$="pesquisarDocumento:btnPesquisar"]');
+  if (pesquisarBtn) {
+    await pesquisarBtn.click();
+  } else {
+    const allBtns = await page.$$('input[type="submit"], input[type="button"], button');
+    for (const btn of allBtns) {
+      const val = await page.evaluate((el: Element) => {
+        if (el instanceof HTMLInputElement) return el.value;
+        return el.textContent || "";
+      }, btn);
+      if (val && val.toUpperCase().includes("PESQUISAR")) {
+        await btn.click();
+        break;
+      }
+    }
+  }
+
+  await new Promise(r => setTimeout(r, 5000));
+
+  await page.waitForSelector('.rich-table, .rf-dt, .resultados, .alert, .rich-panel', { timeout: 10000 }).catch(() => null);
+  await new Promise(r => setTimeout(r, 2000));
+}
+
 async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
   const config = SITE_CONFIGS[siteKey];
   if (!config) {
@@ -65,6 +110,10 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
     });
 
     await new Promise(r => setTimeout(r, 2000));
+
+    if (config.automacao === "pje_trf1") {
+      await automacaoPjeTrf1(page, cpf);
+    }
 
     const pdfBuffer = await page.pdf({
       format: "A4",
@@ -139,6 +188,10 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
             return page.goto(config.url, { waitUntil: "load", timeout: 15000 });
           });
           await new Promise(r => setTimeout(r, 2000));
+
+          if (config.automacao === "pje_trf1") {
+            await automacaoPjeTrf1(page, cpf);
+          }
 
           const headerHtml = `<div style="font-size:10px;font-family:Arial;color:#333;padding:5px 10mm;border-bottom:1px solid #ccc;"><b>Fonte: ${siteKey.toUpperCase().replace(/_/g, " ")}</b> | CPF: ${cpf} | ${new Date().toLocaleDateString("pt-BR")}</div>`;
 
