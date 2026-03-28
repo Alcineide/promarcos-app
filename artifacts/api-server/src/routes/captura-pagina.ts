@@ -66,7 +66,15 @@ const CHROMIUM_ARGS = [
 
 interface SiteConfig {
   url: string;
-  automacao?: "pje_trf1" | "trf1_processual";
+  automacao?: "pje_trf1" | "trf1_processual" | "tse_certidao";
+}
+
+interface DadosPesquisa {
+  cpf: string;
+  nome?: string;
+  dataNascimento?: string;
+  nomeMae?: string;
+  nomePai?: string;
 }
 
 const PJE_TRF1_URL = "https://pje1g-consultapublica.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam";
@@ -82,8 +90,7 @@ const SITE_CONFIGS: Record<string, SiteConfig> = {
   trf1_imperatriz: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=MA&subsecao=IMPERATRIZ", automacao: "trf1_processual" },
   trf1_palmas: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=PALMAS", automacao: "trf1_processual" },
   trf1_gurupi: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=GURUPI", automacao: "trf1_processual" },
-  tse_local_votacao: { url: "https://www.tse.jus.br/servicos-eleitorais/titulo-e-local-de-votacao/consulta-por-nome" },
-  tse_certidao: { url: "https://www.tse.jus.br/servicos-eleitorais/certidoes/certidao-de-quitacao-eleitoral" },
+  tse_certidao: { url: "https://www.tse.jus.br/servicos-eleitorais/autoatendimento-eleitoral#/certidoes-eleitor", automacao: "tse_certidao" },
 };
 
 function formatCpfDots(cpf: string): string {
@@ -260,7 +267,120 @@ async function automacaoTrf1Processual(page: import("puppeteer-core").Page, cpf:
   await new Promise(r => setTimeout(r, 1000));
 }
 
-async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
+async function automacaoTseCertidao(page: import("puppeteer-core").Page, dados: DadosPesquisa): Promise<void> {
+  await new Promise(r => setTimeout(r, 5000));
+
+  const cpfFormatado = formatCpfDots(dados.cpf);
+
+  const modalVisible = await page.evaluate(() => {
+    const modals = document.querySelectorAll('.modal, [role="dialog"], .mat-dialog-container, .cdk-overlay-container');
+    for (const m of modals) {
+      if ((m as HTMLElement).offsetParent !== null || (m as HTMLElement).offsetHeight > 0) return true;
+    }
+    return document.body.innerText.includes("Nome do eleitor") || document.body.innerText.includes("Autenticação");
+  });
+
+  if (!modalVisible) {
+    const certidaoLink = await page.evaluate(() => {
+      const links = document.querySelectorAll('a, button, div[role="button"], li, span');
+      for (const el of links) {
+        const text = el.textContent || "";
+        if (/certid.o de quita..o/i.test(text) || /1\.\s*Certid/i.test(text)) {
+          (el as HTMLElement).click();
+          return true;
+        }
+      }
+      return false;
+    });
+    if (certidaoLink) {
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+
+  const allInputs = await page.$$('input[type="text"], input:not([type])');
+
+  if (allInputs.length >= 2) {
+    if (dados.nome) {
+      await allInputs[0].click({ clickCount: 3 });
+      await allInputs[0].type(dados.nome, { delay: 30 });
+    }
+
+    await allInputs[1].click({ clickCount: 3 });
+    await allInputs[1].type(cpfFormatado, { delay: 30 });
+  }
+
+  if (dados.dataNascimento && allInputs.length >= 3) {
+    await allInputs[2].click({ clickCount: 3 });
+    await allInputs[2].type(dados.dataNascimento, { delay: 30 });
+  }
+
+  const selects = await page.$$('select');
+  if (selects.length > 0) {
+    await selects[0].select("NOME_MAE_PAI");
+    await new Promise(r => setTimeout(r, 500));
+    await page.evaluate(() => {
+      const sel = document.querySelector('select');
+      if (sel) {
+        for (const opt of sel.options) {
+          if (/mae.*pai|mãe.*pai/i.test(opt.text) || opt.value === "NOME_MAE_PAI") {
+            sel.value = opt.value;
+            sel.dispatchEvent(new Event("change", { bubbles: true }));
+            break;
+          }
+        }
+      }
+    });
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  const updatedInputs = await page.$$('input[type="text"], input:not([type])');
+
+  if (dados.nomeMae && updatedInputs.length >= 4) {
+    const nomeMaeIdx = updatedInputs.length >= 5 ? 3 : updatedInputs.length - 2;
+    await updatedInputs[nomeMaeIdx].click({ clickCount: 3 });
+    await updatedInputs[nomeMaeIdx].type(dados.nomeMae, { delay: 30 });
+  }
+
+  if (dados.nomePai && updatedInputs.length >= 5) {
+    const nomePaiIdx = updatedInputs.length - 1;
+    await updatedInputs[nomePaiIdx].click({ clickCount: 3 });
+    await updatedInputs[nomePaiIdx].type(dados.nomePai, { delay: 30 });
+  }
+
+  await new Promise(r => setTimeout(r, 1000));
+
+  await page.evaluate(() => {
+    const btns = document.querySelectorAll('button');
+    for (const btn of btns) {
+      const text = btn.textContent || "";
+      if (/entrar/i.test(text.trim())) {
+        btn.click();
+        return;
+      }
+    }
+  });
+
+  await new Promise(r => setTimeout(r, 10000));
+
+  await page.waitForSelector('.certidao, .resultado, .alert, .mat-card, .content, .sucesso, .erro, body', { timeout: 15000 }).catch(() => null);
+  await new Promise(r => setTimeout(r, 3000));
+
+  await page.evaluate(async () => {
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+    let prev = 0;
+    let curr = document.body.scrollHeight;
+    while (curr !== prev) {
+      window.scrollTo(0, curr);
+      await delay(500);
+      prev = curr;
+      curr = document.body.scrollHeight;
+    }
+    window.scrollTo(0, 0);
+  });
+  await new Promise(r => setTimeout(r, 1000));
+}
+
+async function capturarPagina(siteKey: string, cpf: string, dados?: DadosPesquisa): Promise<Buffer> {
   const config = SITE_CONFIGS[siteKey];
   if (!config) {
     throw new Error(`Site ${siteKey} não configurado`);
@@ -291,6 +411,8 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
       await automacaoPjeTrf1(page, cpf);
     } else if (config.automacao === "trf1_processual") {
       await automacaoTrf1Processual(page, cpf);
+    } else if (config.automacao === "tse_certidao" && dados) {
+      await automacaoTseCertidao(page, dados);
     }
 
     const pdfOptions: Parameters<typeof page.pdf>[0] = {
@@ -298,10 +420,10 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
       margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
     };
 
-    if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
+    if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual" || config.automacao === "tse_certidao") {
       const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
       pdfOptions.width = "1280px";
-      pdfOptions.height = `${bodyHeight + 40}px`;
+      pdfOptions.height = `${Math.max(bodyHeight + 40, 900)}px`;
     } else {
       pdfOptions.format = "A4";
     }
@@ -316,7 +438,7 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
 
 router.post("/pesquisa/consultar-site", async (req, res) => {
   try {
-    const { siteKey, cpf } = req.body as { siteKey: string; cpf: string };
+    const { siteKey, cpf, nome, dataNascimento, nomeMae, nomePai } = req.body as { siteKey: string; cpf: string; nome?: string; dataNascimento?: string; nomeMae?: string; nomePai?: string };
 
     if (!siteKey || !SITE_CONFIGS[siteKey]) {
       res.json({ siteKey, encontrado: false, mensagem: "Site não configurado", pdf: null });
@@ -324,6 +446,7 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
     }
 
     const config = SITE_CONFIGS[siteKey];
+    const dados: DadosPesquisa = { cpf, nome, dataNascimento, nomeMae, nomePai };
     req.log.info({ siteKey, cpf }, "Consultando site com captura");
 
     const browser = await puppeteerExtra.launch({
@@ -351,6 +474,8 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
         await automacaoPjeTrf1(page, cpf);
       } else if (config.automacao === "trf1_processual") {
         await automacaoTrf1Processual(page, cpf);
+      } else if (config.automacao === "tse_certidao") {
+        await automacaoTseCertidao(page, dados);
       }
 
       const pageText = await page.evaluate(() => document.body?.innerText || "");
@@ -382,10 +507,10 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
         footerTemplate: `<div style="font-size:9px;font-family:Arial,sans-serif;color:#555;width:100%;padding:0 15mm;display:flex;justify-content:space-between;"><span>${pageUrl}</span><span><span class="pageNumber"></span>/<span class="totalPages"></span></span></div>`,
       };
 
-      if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
+      if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual" || config.automacao === "tse_certidao") {
         const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
         consultaPdfOptions.width = "1280px";
-        consultaPdfOptions.height = `${bodyHeight + 40}px`;
+        consultaPdfOptions.height = `${Math.max(bodyHeight + 40, 900)}px`;
       } else {
         consultaPdfOptions.format = "A4";
       }
@@ -417,15 +542,16 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
 
 router.post("/pesquisa/capturar-pagina", async (req, res) => {
   try {
-    const { siteKey, cpf } = req.body as { siteKey: string; cpf: string };
+    const { siteKey, cpf, nome, dataNascimento, nomeMae, nomePai } = req.body as { siteKey: string; cpf: string; nome?: string; dataNascimento?: string; nomeMae?: string; nomePai?: string };
 
     if (!siteKey || !SITE_CONFIGS[siteKey]) {
       res.status(400).json({ error: "Site não configurado para captura" });
       return;
     }
 
+    const dados: DadosPesquisa = { cpf, nome, dataNascimento, nomeMae, nomePai };
     req.log.info({ siteKey, cpf }, "Iniciando captura de pagina");
-    const pdfBuffer = await capturarPagina(siteKey, cpf);
+    const pdfBuffer = await capturarPagina(siteKey, cpf, dados);
 
     const safeKey = siteKey.replace(/[^a-zA-Z0-9]/g, "_");
     const safeCpf = cpf.replace(/\D/g, "");
@@ -440,12 +566,14 @@ router.post("/pesquisa/capturar-pagina", async (req, res) => {
 
 router.post("/pesquisa/capturar-todas", async (req, res) => {
   try {
-    const { cpf, sites } = req.body as { cpf: string; sites: string[] };
+    const { cpf, sites, nome, dataNascimento, nomeMae, nomePai } = req.body as { cpf: string; sites: string[]; nome?: string; dataNascimento?: string; nomeMae?: string; nomePai?: string };
 
     if (!sites || sites.length === 0) {
       res.status(400).json({ error: "Nenhum site informado" });
       return;
     }
+
+    const dados: DadosPesquisa = { cpf, nome, dataNascimento, nomeMae, nomePai };
 
     const browser = await puppeteerExtra.launch({
       executablePath: CHROMIUM_PATH,
@@ -476,6 +604,8 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
             await automacaoPjeTrf1(page, cpf);
           } else if (config.automacao === "trf1_processual") {
             await automacaoTrf1Processual(page, cpf);
+          } else if (config.automacao === "tse_certidao") {
+            await automacaoTseCertidao(page, dados);
           }
 
           const headerHtml = `<div style="font-size:10px;font-family:Arial;color:#333;padding:5px 10mm;border-bottom:1px solid #ccc;"><b>Fonte: ${siteKey.toUpperCase().replace(/_/g, " ")}</b> | CPF: ${cpf} | ${new Date().toLocaleDateString("pt-BR")}</div>`;
@@ -488,10 +618,10 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
             footerTemplate: '<div style="font-size:8px;text-align:center;width:100%;color:#999;">Promarcos - Mendes Advocacia | Página <span class="pageNumber"></span></div>',
           };
 
-          if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
+          if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual" || config.automacao === "tse_certidao") {
             const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
             todasPdfOpts.width = "1280px";
-            todasPdfOpts.height = `${bodyHeight + 40}px`;
+            todasPdfOpts.height = `${Math.max(bodyHeight + 40, 900)}px`;
           } else {
             todasPdfOpts.format = "A4";
           }

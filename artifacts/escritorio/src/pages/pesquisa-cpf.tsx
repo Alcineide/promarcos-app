@@ -22,12 +22,12 @@ const CONSULTAS = [
   { key: "trf1_imperatriz", label: "TRF1-IMPERATRIZ", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=MA&subsecao=IMPERATRIZ", descricao: "TRF1 Subseção Imperatriz - Processos Físicos (Antigo)" },
   { key: "trf1_palmas", label: "TRF1-PALMAS", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=PALMAS", descricao: "TRF1 Subseção Palmas - Processos Físicos (Antigo)" },
   { key: "trf1_gurupi", label: "TRF1-GURUPI", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=GURUPI", descricao: "TRF1 Subseção Gurupi - Processos Físicos (Antigo)" },
-  { key: "tse_local_votacao", label: "TSE-LOCAL VOTAÇÃO", url: "https://www.tse.jus.br/servicos-eleitorais/titulo-e-local-de-votacao/consulta-por-nome", descricao: "Consulta Local de Votação - TSE" },
-  { key: "tse_certidao", label: "TSE-CERTIDÃO", url: "https://www.tse.jus.br/servicos-eleitorais/certidoes/certidao-de-quitacao-eleitoral", descricao: "Certidão de Quitação Eleitoral - TSE" },
+  { key: "tse_certidao", label: "TSE-CERTIDÃO ELEITORAL", url: "https://www.tse.jus.br/servicos-eleitorais/autoatendimento-eleitoral#/certidoes-eleitor", descricao: "Certidão de Quitação Eleitoral - TSE" },
 ];
 
 export default function PesquisaCpf() {
   const [cpf, setCpf] = useState("");
+  const [nomeCompleto, setNomeCompleto] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
   const [nomeMae, setNomeMae] = useState("");
   const [nomePai, setNomePai] = useState("");
@@ -75,7 +75,7 @@ export default function PesquisaCpf() {
         const res = await fetch("/api/pesquisa/consultar-site", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ siteKey: consulta.key, cpf: cpfNumerico }),
+          body: JSON.stringify({ siteKey: consulta.key, cpf: cpfNumerico, nome: nomeCompleto, dataNascimento, nomeMae, nomePai }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -104,7 +104,7 @@ export default function PesquisaCpf() {
     setFonteAtual("");
     setPesquisaFeita(true);
     setPesquisando(false);
-  }, [cpf, dataNascimento]);
+  }, [cpf, nomeCompleto, dataNascimento, nomeMae, nomePai]);
 
   function getSiteKey(label: string): string | null {
     const consulta = CONSULTAS.find(c => c.label === label);
@@ -248,6 +248,18 @@ export default function PesquisaCpf() {
                 </div>
 
                 <div>
+                  <label className="block text-xs text-muted-foreground mb-0.5">Nome Completo:</label>
+                  <input
+                    type="text"
+                    value={nomeCompleto}
+                    onChange={(e) => setNomeCompleto(e.target.value.toUpperCase())}
+                    onKeyDown={handleKeyDown}
+                    placeholder="NOME COMPLETO"
+                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 uppercase"
+                  />
+                </div>
+
+                <div>
                   <label className="block text-xs text-muted-foreground mb-0.5">Data Nascimento:</label>
                   <input
                     type="text"
@@ -322,7 +334,7 @@ export default function PesquisaCpf() {
 
               <div className="mt-4 pt-3 border-t border-border">
                 <p className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-semibold mb-2">Links consulta</p>
-                <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                <div className="space-y-0.5 max-h-64 overflow-y-auto">
                   {CONSULTAS.filter(c => "url" in c && c.url).map((c) => (
                     <a
                       key={c.key}

@@ -8,6 +8,8 @@ Sistema complementar de cadastro de clientes para o escritório Mendes Advocacia
 
 - **Busca de clientes** por nome ou CPF
 - **Pesquisa CPF** — consulta dual-source (Sistema Local + Promarcos API) com resultados em tabela Local/Mensagem, incluindo dados pessoais, contato, endereço e processos
+- **Pesquisa CPF - Campos extras**: Nome Completo, Data Nascimento, Nome da Mãe, Nome do Pai (usados pela automação TSE)
+- **TSE Certidão Eleitoral**: automação que preenche formulário do autoatendimento eleitoral do TSE com nome, CPF, data de nascimento e filiação
 - **Cadastro completo** com todos os campos (dados pessoais, contato, endereço)
 - **CEP automático** via ViaCEP
 - **Processos/Pastas**: cadastro com número, fluxo, estágio, benefício, fato gerador, etc.
