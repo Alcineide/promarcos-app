@@ -18,10 +18,6 @@ localPort = 24800
 [services.development]
 run = "pnpm --filter @workspace/scanner-mobile run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/scanner-mobile", "run", "build" ]
-run = [ "pnpm", "--filter", "@workspace/scanner-mobile", "run", "serve" ]
-
 [services.env]
 PORT = "24800"
 BASE_PATH = "/scanner-mobile/"
