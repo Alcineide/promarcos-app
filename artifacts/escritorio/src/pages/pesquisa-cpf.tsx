@@ -4,23 +4,32 @@ import { useState, useCallback } from "react";
 interface PesquisaResult {
   local: string;
   mensagem: string;
+  dados?: Record<string, unknown>;
+  baixando?: boolean;
 }
 
 const CONSULTAS = [
-  { key: "local", label: "Sistema Local", tipo: "api" },
-  { key: "promarcos", label: "Promarcos", tipo: "api" },
-  { key: "dap", label: "DAP", url: "https://smap14.mda.gov.br/extratodap/PesquisarDAP", tipo: "externo", descricao: "Declaração de Aptidão ao PRONAF" },
-  { key: "caf", label: "CAF", url: "https://caf.mda.gov.br/consulta-publica/ufpa", tipo: "externo", descricao: "Cadastro da Agricultura Familiar" },
-  { key: "incra", label: "INCRA", url: "https://saladacidadania.incra.gov.br", tipo: "externo", descricao: "Sala da Cidadania - INCRA" },
-  { key: "sncr", label: "SNCR", url: "https://sncr.serpro.gov.br/sncr/public/pages/consulta/consultaImovelPublicoByCpfCnpj.jsf", tipo: "externo", descricao: "Sistema Nacional de Cadastro Rural" },
-  { key: "sigef", label: "SIGEF", url: "https://sigef.incra.gov.br/geo/parcela/", tipo: "externo", descricao: "Sistema de Gestão Fundiária - INCRA" },
-  { key: "registro_rural", label: "REGISTRO RURAL", url: "https://www.registrorural.com.br", tipo: "externo", descricao: "Registro Rural (requer nome e município)" },
-  { key: "pesqbrasil", label: "PESQBRASIL", url: "https://sistemas.mpa.gov.br/pesqbrasil/publico/pesquisa", tipo: "externo", descricao: "Pesca Brasil - MPA" },
-  { key: "sisrgp", label: "SisRGP", url: "https://sistemas.mpa.gov.br/sisrgp/pages/consultar/consultarLicencaPublico.jsf", tipo: "externo", descricao: "Registro Geral da Pesca - MPA" },
-  { key: "cnd_to", label: "CND-TO", url: "https://app.sefaz.to.gov.br/SINTEGRA-WEB/", tipo: "externo", descricao: "SINTEGRA Tocantins - SEFAZ-TO" },
-  { key: "contag", label: "CONTAG", url: "https://www.contag.org.br", tipo: "externo", descricao: "Confederação Nacional Trab. na Agricultura" },
-  { key: "pje_trf1", label: "PJE-TRF1", url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", tipo: "externo", descricao: "PJe TRF1 - Consulta Pública" },
-  { key: "trf1_secao_to", label: "TRF1-SEÇÃO-TO", url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", tipo: "externo", descricao: "TRF1 Seção Judiciária do Tocantins" },
+  { key: "local", label: "Sistema Local" },
+  { key: "promarcos", label: "Promarcos" },
+  { key: "dap", label: "DAP", url: "https://smap14.mda.gov.br/extratodap/PesquisarDAP", descricao: "Declaração de Aptidão ao PRONAF" },
+  { key: "caf", label: "CAF", url: "https://caf.mda.gov.br/consulta-publica/ufpa", descricao: "Cadastro da Agricultura Familiar" },
+  { key: "incra", label: "INCRA", url: "https://saladacidadania.incra.gov.br", descricao: "Sala da Cidadania - INCRA" },
+  { key: "sncr", label: "SNCR", url: "https://sncr.serpro.gov.br/sncr/public/pages/consulta/consultaImovelPublicoByCpfCnpj.jsf", descricao: "Sistema Nacional de Cadastro Rural" },
+  { key: "sigef", label: "SIGEF", url: "https://sigef.incra.gov.br/geo/parcela/", descricao: "Sistema de Gestão Fundiária - INCRA" },
+  { key: "registro_rural", label: "REGISTRO RURAL", url: "https://www.registrorural.com.br", descricao: "Registro Rural" },
+  { key: "pesqbrasil", label: "PESQBRASIL", url: "https://sistemas.mpa.gov.br/pesqbrasil/publico/pesquisa", descricao: "Pesca Brasil - MPA" },
+  { key: "sisrgp", label: "SisRGP", url: "https://sistemas.mpa.gov.br/sisrgp/pages/consultar/consultarLicencaPublico.jsf", descricao: "Registro Geral da Pesca - MPA" },
+  { key: "cnd_to", label: "CND-TO", url: "https://app.sefaz.to.gov.br/SINTEGRA-WEB/", descricao: "SINTEGRA Tocantins - SEFAZ-TO" },
+  { key: "contag", label: "CONTAG", url: "https://www.contag.org.br", descricao: "Confederação Nacional Trab. na Agricultura" },
+  { key: "pje_trf1", label: "PJE-TRF1", url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", descricao: "PJe TRF1 - Consulta Pública" },
+  { key: "trf1_secao_to", label: "TRF1-SEÇÃO-TO", url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", descricao: "TRF1 Seção Judiciária do Tocantins" },
+  { key: "trf1_araguaina", label: "TRF1-ARAGUAÍNA", url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", descricao: "TRF1 Subseção Araguaína" },
+  { key: "trf1_balsas", label: "TRF1-BALSAS", url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", descricao: "TRF1 Subseção Balsas" },
+  { key: "trf1_imperatriz", label: "TRF1-IMPERATRIZ", url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", descricao: "TRF1 Subseção Imperatriz" },
+  { key: "trf1_palmas", label: "TRF1-PALMAS", url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", descricao: "TRF1 Subseção Palmas" },
+  { key: "trf1_gurupi", label: "TRF1-GURUPI", url: "https://pje1g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", descricao: "TRF1 Subseção Gurupi" },
+  { key: "tse_local_votacao", label: "TSE-LOCAL VOTAÇÃO", url: "https://www.tse.jus.br/servicos-eleitorais/titulo-e-local-de-votacao/consulta-por-nome", descricao: "Consulta Local de Votação - TSE" },
+  { key: "tse_certidao", label: "TSE-CERTIDÃO", url: "https://www.tse.jus.br/servicos-eleitorais/certidoes/certidao-de-quitacao-eleitoral", descricao: "Certidão de Quitação Eleitoral - TSE" },
 ];
 
 export default function PesquisaCpf() {
@@ -67,49 +76,26 @@ export default function PesquisaCpf() {
 
     for (const consulta of CONSULTAS) {
       setFonteAtual(consulta.label);
-
-      if (consulta.tipo === "api") {
-        try {
-          const res = await fetch(`/api/pesquisa-cpf/${consulta.key}/${cpfNumerico}`);
-          if (res.ok) {
-            const data = await res.json();
-            setResultados((prev) => [...prev, {
-              local: consulta.label,
-              mensagem: (data.encontrado) ? (data.mensagem || "Informação localizada") : "Nenhuma informação neste local",
-            }]);
-          } else {
-            setResultados((prev) => [...prev, {
-              local: consulta.label,
-              mensagem: "Nenhuma informação neste local",
-            }]);
-          }
-        } catch {
+      try {
+        const res = await fetch(`/api/pesquisa-cpf/${consulta.key}/${cpfNumerico}`);
+        if (res.ok) {
+          const data = await res.json();
+          setResultados((prev) => [...prev, {
+            local: consulta.label,
+            mensagem: data.encontrado ? (data.mensagem || "Informação localizada") : "Nenhuma informação neste local",
+            dados: data.dados || undefined,
+          }]);
+        } else {
           setResultados((prev) => [...prev, {
             local: consulta.label,
             mensagem: "Nenhuma informação neste local",
           }]);
         }
-      } else {
-        try {
-          const res = await fetch(`/api/pesquisa-cpf/${consulta.key}/${cpfNumerico}`);
-          if (res.ok) {
-            const data = await res.json();
-            setResultados((prev) => [...prev, {
-              local: consulta.label,
-              mensagem: (data.encontrado) ? (data.mensagem || "Informação localizada") : "Nenhuma informação neste local",
-            }]);
-          } else {
-            setResultados((prev) => [...prev, {
-              local: consulta.label,
-              mensagem: "Nenhuma informação neste local",
-            }]);
-          }
-        } catch {
-          setResultados((prev) => [...prev, {
-            local: consulta.label,
-            mensagem: "Nenhuma informação neste local",
-          }]);
-        }
+      } catch {
+        setResultados((prev) => [...prev, {
+          local: consulta.label,
+          mensagem: "Nenhuma informação neste local",
+        }]);
       }
     }
 
@@ -117,6 +103,38 @@ export default function PesquisaCpf() {
     setPesquisaFeita(true);
     setPesquisando(false);
   }, [cpf, dataNascimento]);
+
+  async function handleBaixarPdf(index: number) {
+    const r = resultados[index];
+    setResultados((prev) => prev.map((item, i) => i === index ? { ...item, baixando: true } : item));
+    try {
+      const res = await fetch("/api/pesquisa/gerar-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cpf,
+          dataNascimento,
+          nomeMae,
+          nomePai,
+          local: r.local,
+          mensagem: r.mensagem,
+          dados: r.dados,
+        }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `pesquisa_${r.local.replace(/[^a-zA-Z0-9]/g, "_")}_${cpf.replace(/\D/g, "")}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch { /* silently fail */ }
+    setResultados((prev) => prev.map((item, i) => i === index ? { ...item, baixando: false } : item));
+  }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter") handlePesquisar();
@@ -153,14 +171,14 @@ export default function PesquisaCpf() {
 
   return (
     <Layout>
-      <div className="max-w-5xl mx-auto py-4">
+      <div className="max-w-6xl mx-auto py-4">
         <div className="mb-4 text-center">
           <h2 className="font-display text-xl font-bold text-foreground">7. Pesquisa</h2>
         </div>
 
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="flex flex-col md:flex-row">
-            <div className="md:w-64 border-b md:border-b-0 md:border-r border-border p-4">
+            <div className="md:w-64 border-b md:border-b-0 md:border-r border-border p-4 shrink-0">
               <h3 className="font-bold text-sm text-foreground uppercase mb-3 tracking-wider">Pesquisas</h3>
 
               <div className="space-y-2">
@@ -249,28 +267,26 @@ export default function PesquisaCpf() {
                 )}
               </div>
 
-              {CONSULTAS.filter(c => c.tipo === "externo" && c.url).length > 0 && (
-                <div className="mt-4 pt-3 border-t border-border">
-                  <p className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-semibold mb-2">Links consulta</p>
-                  <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                    {CONSULTAS.filter(c => c.tipo === "externo" && c.url).map((c) => (
-                      <a
-                        key={c.key}
-                        href={c.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={c.descricao}
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-blue-400 py-0.5 transition-colors"
-                      >
-                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 shrink-0">
-                          <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5zm7.5-3.25a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0V4.06l-6.22 6.22a.75.75 0 11-1.06-1.06L14.94 3H12.5a.75.75 0 01-.75-.75z" clipRule="evenodd" />
-                        </svg>
-                        {c.label}
-                      </a>
-                    ))}
-                  </div>
+              <div className="mt-4 pt-3 border-t border-border">
+                <p className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-semibold mb-2">Links consulta</p>
+                <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                  {CONSULTAS.filter(c => "url" in c && c.url).map((c) => (
+                    <a
+                      key={c.key}
+                      href={(c as { url: string }).url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={"descricao" in c ? (c as { descricao: string }).descricao : c.label}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-blue-400 py-0.5 transition-colors"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 shrink-0">
+                        <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5zm7.5-3.25a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0V4.06l-6.22 6.22a.75.75 0 11-1.06-1.06L14.94 3H12.5a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+                      </svg>
+                      {c.label}
+                    </a>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
 
             <div className="flex-1 min-w-0">
@@ -278,12 +294,15 @@ export default function PesquisaCpf() {
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wider">Resultados</h3>
               </div>
 
-              <div className="grid grid-cols-[200px_1fr] border-b border-border bg-muted/30">
+              <div className="grid grid-cols-[180px_1fr_90px] border-b border-border bg-muted/30">
                 <div className="px-3 py-2 text-xs font-bold text-foreground uppercase tracking-wide border-r border-border">
                   Local
                 </div>
-                <div className="px-3 py-2 text-xs font-bold text-foreground uppercase tracking-wide">
+                <div className="px-3 py-2 text-xs font-bold text-foreground uppercase tracking-wide border-r border-border">
                   Mensagem
+                </div>
+                <div className="px-3 py-2 text-xs font-bold text-foreground uppercase tracking-wide">
+                  Arquivo
                 </div>
               </div>
 
@@ -292,12 +311,25 @@ export default function PesquisaCpf() {
                   resultados.map((r, i) => {
                     const temInfo = r.mensagem !== "Nenhuma informação neste local";
                     return (
-                      <div key={i} className="grid grid-cols-[200px_1fr] border-b border-border last:border-b-0">
+                      <div key={i} className="grid grid-cols-[180px_1fr_90px] border-b border-border last:border-b-0">
                         <div className={`px-3 py-2 text-sm border-r border-border font-semibold ${temInfo ? "text-green-400" : "text-muted-foreground"}`}>
                           {r.local}
                         </div>
-                        <div className={`px-3 py-2 text-sm ${temInfo ? "text-foreground" : "text-muted-foreground/60 italic"}`}>
+                        <div className={`px-3 py-2 text-sm border-r border-border ${temInfo ? "text-foreground" : "text-muted-foreground/60 italic"}`}>
                           {r.mensagem}
+                        </div>
+                        <div className="px-3 py-2 text-sm">
+                          <button
+                            onClick={() => handleBaixarPdf(i)}
+                            disabled={r.baixando}
+                            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors text-xs font-medium disabled:opacity-50"
+                          >
+                            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                              <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+                              <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+                            </svg>
+                            {r.baixando ? "..." : "PDF"}
+                          </button>
                         </div>
                       </div>
                     );

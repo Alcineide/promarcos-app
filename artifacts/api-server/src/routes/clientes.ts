@@ -275,12 +275,17 @@ router.get("/pesquisa-cpf/promarcos/:cpf", async (req, res) => {
   }
 });
 
-const PESQUISA_SOURCES = ["dap", "caf", "incra", "cnis", "ctps", "tribunal", "provas", "receita", "detran", "jusbrasil", "inss", "sncr", "sigef", "registro_rural", "pesqbrasil", "sisrgp", "cnd_to", "contag", "pje_trf1", "trf1_secao_to"] as const;
+const PESQUISA_SOURCES = [
+  "dap", "caf", "incra", "cnis", "ctps", "tribunal", "provas", "receita", "detran", "jusbrasil", "inss",
+  "sncr", "sigef", "registro_rural", "pesqbrasil", "sisrgp", "cnd_to", "contag",
+  "pje_trf1", "trf1_secao_to", "trf1_araguaina", "trf1_balsas", "trf1_imperatriz", "trf1_palmas", "trf1_gurupi",
+  "tse_local_votacao", "tse_certidao"
+] as const;
 
 for (const source of PESQUISA_SOURCES) {
   router.get(`/pesquisa-cpf/${source}/:cpf`, async (req, res) => {
     const cpfRaw = req.params.cpf.replace(/\D/g, "");
-    const label = source.toUpperCase();
+    const label = source.toUpperCase().replace(/_/g, " ");
     try {
       const upstream = await fetchWithTimeout(`${PROMARCOS_BASE}/pesquisa/${source}/${cpfRaw}`, 30000);
       if (!upstream.ok) {
@@ -302,5 +307,98 @@ for (const source of PESQUISA_SOURCES) {
     }
   });
 }
+
+router.post("/pesquisa/gerar-pdf", async (req, res) => {
+  try {
+    const PDFDocument = (await import("pdfkit")).default;
+    const { cpf, dataNascimento, nomeMae, nomePai, local, mensagem, dados } = req.body as {
+      cpf: string;
+      dataNascimento?: string;
+      nomeMae?: string;
+      nomePai?: string;
+      local: string;
+      mensagem: string;
+      dados?: Record<string, unknown>;
+    };
+
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    const chunks: Buffer[] = [];
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+
+    await new Promise<void>((resolve, reject) => {
+      doc.on("end", resolve);
+      doc.on("error", reject);
+
+      doc.fontSize(18).font("Helvetica-Bold").text("Relatório de Pesquisa", { align: "center" });
+      doc.moveDown(0.5);
+      doc.fontSize(10).font("Helvetica").text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, { align: "center" });
+      doc.moveDown(1);
+
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.5);
+
+      doc.fontSize(12).font("Helvetica-Bold").text("Dados da Pesquisa:");
+      doc.moveDown(0.3);
+      doc.fontSize(10).font("Helvetica");
+      doc.text(`CPF: ${cpf}`);
+      if (dataNascimento) doc.text(`Data Nascimento: ${dataNascimento}`);
+      if (nomeMae) doc.text(`Nome da Mãe: ${nomeMae}`);
+      if (nomePai) doc.text(`Nome do Pai: ${nomePai}`);
+      doc.moveDown(0.5);
+
+      doc.fontSize(12).font("Helvetica-Bold").text(`Fonte: ${local}`);
+      doc.moveDown(0.3);
+      doc.fontSize(10).font("Helvetica").text(`Resultado: ${mensagem}`);
+      doc.moveDown(0.5);
+
+      if (dados && typeof dados === "object" && Object.keys(dados).length > 0) {
+        doc.fontSize(12).font("Helvetica-Bold").text("Dados Retornados:");
+        doc.moveDown(0.3);
+        doc.fontSize(9).font("Helvetica");
+
+        function printObj(obj: unknown, indent: number = 0) {
+          if (typeof obj !== "object" || obj === null) {
+            doc.text(String(obj), { indent: indent * 15 });
+            return;
+          }
+          if (Array.isArray(obj)) {
+            obj.forEach((item, idx) => {
+              doc.text(`[${idx + 1}]`, { indent: indent * 15 });
+              printObj(item, indent + 1);
+            });
+          } else {
+            for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+              if (typeof val === "object" && val !== null) {
+                doc.text(`${key}:`, { indent: indent * 15 });
+                printObj(val, indent + 1);
+              } else {
+                doc.text(`${key}: ${val ?? ""}`, { indent: indent * 15 });
+              }
+            }
+          }
+        }
+        printObj(dados);
+      }
+
+      doc.moveDown(2);
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(8).font("Helvetica").fillColor("#888888")
+        .text("Documento gerado automaticamente pelo sistema Promarcos - Mendes Advocacia", { align: "center" });
+
+      doc.end();
+    });
+
+    const pdfBuffer = Buffer.concat(chunks);
+    const safeLocal = local.replace(/[^a-zA-Z0-9]/g, "_");
+    const safeCpf = cpf.replace(/\D/g, "");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="pesquisa_${safeLocal}_${safeCpf}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Erro ao gerar PDF" });
+  }
+});
 
 export default router;
