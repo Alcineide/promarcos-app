@@ -502,7 +502,7 @@ export default function ClientForm() {
           if (data.parcial) {
             toast({ title: "Atenção", description: data.mensagem || "Alguns documentos não puderam ser gerados." });
           } else {
-            toast({ title: "Sucesso", description: "Todos os documentos foram gerados e enviados para assinatura digital." });
+            toast({ title: "Sucesso", description: "Todos os documentos foram gerados e vinculados para assinatura única." });
           }
           await fetchZapsignDocs(clienteData.cpf);
         }
@@ -534,6 +534,10 @@ export default function ClientForm() {
   };
 
   const handleAssinar = async (doc: any) => {
+    if (doc.urlAssinatura) {
+      window.open(doc.urlAssinatura, "_blank");
+      return;
+    }
     try {
       const res = await fetch(`/api/zapsign/assinar/${doc.id}`, { method: "POST" });
       if (res.ok) {
@@ -553,8 +557,15 @@ export default function ClientForm() {
     const pendentes = zapsignDocs.filter(d => d.statusAssinatura === "pendente");
     if (pendentes.length === 0) return;
     setSigningAll(true);
+    const loteUrls = new Set<string>();
     for (const doc of pendentes) {
-      await handleAssinar(doc);
+      const url = doc.urlAssinatura;
+      if (url && !loteUrls.has(url)) {
+        loteUrls.add(url);
+        window.open(url, "_blank");
+      } else if (!url) {
+        await handleAssinar(doc);
+      }
     }
     setSigningAll(false);
   };

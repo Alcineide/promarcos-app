@@ -14,7 +14,7 @@ Sistema complementar de cadastro de clientes para o escritório Mendes Advocacia
 - **CEP automático** via ViaCEP
 - **Processos/Pastas**: cadastro com número, fluxo, estágio, benefício, fato gerador, etc.
 - **Documentos digitais** com integração **ZapSign** para assinatura digital
-- **ZapSign**: gera PDFs (Procuração, Contrato, Declarações, Termo de Risco, Revogação) e envia ao ZapSign para assinatura digital; cards com status "Pendente"/"Assinado", botões visualizar/baixar/assinar/excluir, "Assinar Todos", webhook para atualização automática de status
+- **ZapSign**: gera PDFs (Procuração, Contrato, Declarações, Termo de Risco, Revogação) e envia ao ZapSign; modo lote usa `upload-extra-doc` do ZapSign (primeiro doc como principal, demais como docs vinculados — assinatura única); `signUrl` salvo do retorno ZapSign; cards com status "Pendente"/"Assinado", botões visualizar/baixar/assinar/excluir, "Assinar Todos" (dedup por signUrl no lote), webhook para atualização automática de status; `auth_mode: assinaturaTela`, WhatsApp auto-send ativado
 - **Anexos** de documentos
 
 ---

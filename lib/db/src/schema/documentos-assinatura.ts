@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { clientesTable } from "./clientes";
 
 export const documentosAssinaturaTable = pgTable("documentos_assinatura", {
@@ -9,10 +9,13 @@ export const documentosAssinaturaTable = pgTable("documentos_assinatura", {
   nomeArquivo: text("nome_arquivo").notNull(),
   zapsignDocToken: text("zapsign_doc_token"),
   zapsignSignerToken: text("zapsign_signer_token"),
+  urlAssinatura: text("url_assinatura"),
   statusAssinatura: text("status_assinatura").notNull().default("pendente"),
   urlPdfOriginal: text("url_pdf_original"),
   urlPdfAssinado: text("url_pdf_assinado"),
   signedFile: text("signed_file"),
+  isLotePrincipal: boolean("is_lote_principal").default(false),
+  loteGrupoId: text("lote_grupo_id"),
   dataAssinatura: timestamp("data_assinatura", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

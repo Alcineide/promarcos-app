@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, documentosAssinaturaTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import PDFDocument from "pdfkit";
+import crypto from "crypto";
 
 const router: IRouter = Router();
 
@@ -232,6 +233,80 @@ function buildFileName(tipo: string, cpf: string): string {
 
 const TIPOS_VALIDOS = ["Procuração Extra", "Contrato", "Declaração não incidência", "Declaração Hipossuficiência", "Termo de Risco", "Revogação"];
 
+function buildSignerData(cliente: ClienteDocData) {
+  return {
+    name: cliente.nomeCompleto,
+    email: cliente.email || "",
+    phone_country: "55",
+    phone_number: (cliente.telefone || "").replace(/\D/g, ""),
+    auth_mode: "assinaturaTela",
+    send_automatic_email: false,
+    send_automatic_whatsapp: true,
+  };
+}
+
+async function enviarParaZapSign(base64Pdf: string, nomeArquivo: string, cliente: ClienteDocData, apiToken: string) {
+  const zapBody = {
+    sandbox: false,
+    name: nomeArquivo,
+    lang: "pt-br",
+    disable_signer_emails: false,
+    signers: [buildSignerData(cliente)],
+    doc_base64: base64Pdf,
+  };
+
+  const zapRes = await fetch(`${ZAPSIGN_API}/docs/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiToken}`,
+    },
+    body: JSON.stringify(zapBody),
+  });
+
+  if (!zapRes.ok) {
+    const errText = await zapRes.text();
+    throw new Error(`ZapSign API error ${zapRes.status}: ${errText}`);
+  }
+
+  const zapData = await zapRes.json() as {
+    token: string;
+    signers: Array<{ token: string; sign_url: string }>;
+    original_file?: string;
+  };
+
+  return {
+    token: zapData.token,
+    signerToken: zapData.signers?.[0]?.token || null,
+    signUrl: zapData.signers?.[0]?.sign_url || null,
+    originalFile: zapData.original_file || null,
+  };
+}
+
+async function anexarDocumentoExtraZapSign(tokenPrincipal: string, nomeDocumento: string, base64Pdf: string, apiToken: string) {
+  const payload = {
+    name: nomeDocumento,
+    doc_base64: base64Pdf,
+  };
+
+  const zapRes = await fetch(`${ZAPSIGN_API}/docs/${tokenPrincipal}/upload-extra-doc/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!zapRes.ok) {
+    const errText = await zapRes.text();
+    throw new Error(`ZapSign extra doc error ${zapRes.status}: ${errText}`);
+  }
+
+  const data = await zapRes.json() as { token: string };
+  return { token: data.token };
+}
+
 router.post("/zapsign/gerar-e-enviar", async (req, res) => {
   try {
     const { tipo, cliente, clienteId } = req.body as { tipo: string; cliente: ClienteDocData; clienteId?: number };
@@ -246,58 +321,23 @@ router.post("/zapsign/gerar-e-enviar", async (req, res) => {
       return;
     }
 
-    const token = getToken();
+    const apiToken = getToken();
     const pdfBuffer = await gerarPdfBuffer(tipo, cliente);
     const base64Pdf = pdfBuffer.toString("base64");
     const nomeArquivo = buildFileName(tipo, cliente.cpf);
 
-    const zapBody = {
-      sandbox: false,
-      name: nomeArquivo,
-      lang: "pt-br",
-      signers: [{
-        name: cliente.nomeCompleto,
-        email: cliente.email || "",
-        phone_country: "55",
-        phone_number: (cliente.telefone || "").replace(/\D/g, ""),
-        auth_mode: "assinaturaTela",
-        send_automatic_email: false,
-        send_automatic_whatsapp: false,
-      }],
-      doc_base64: base64Pdf,
-    };
-
-    const zapRes = await fetch(`${ZAPSIGN_API}/docs/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify(zapBody),
-    });
-
-    if (!zapRes.ok) {
-      const errText = await zapRes.text();
-      req.log.error({ status: zapRes.status, body: errText }, "ZapSign API error");
-      res.status(502).json({ mensagem: "Erro ao enviar para ZapSign", detalhes: errText });
-      return;
-    }
-
-    const zapData = await zapRes.json() as {
-      token: string;
-      signers: Array<{ token: string; name: string }>;
-      original_file?: string;
-    };
+    const result = await enviarParaZapSign(base64Pdf, nomeArquivo, cliente, apiToken);
 
     const [registro] = await db.insert(documentosAssinaturaTable).values({
       clienteId: clienteId || null,
       cpf: cliente.cpf.replace(/\D/g, ""),
       tipoDocumento: tipo,
       nomeArquivo,
-      zapsignDocToken: zapData.token,
-      zapsignSignerToken: zapData.signers?.[0]?.token || null,
+      zapsignDocToken: result.token,
+      zapsignSignerToken: result.signerToken,
+      urlAssinatura: result.signUrl,
       statusAssinatura: "pendente",
-      urlPdfOriginal: zapData.original_file || null,
+      urlPdfOriginal: result.originalFile,
     }).returning();
 
     res.json({
@@ -307,8 +347,6 @@ router.post("/zapsign/gerar-e-enviar", async (req, res) => {
         nomeArquivo,
         tipoDocumento: tipo,
         statusAssinatura: "pendente",
-        zapsignDocToken: zapData.token,
-        zapsignSignerToken: zapData.signers?.[0]?.token || null,
         createdAt: registro.createdAt.toISOString(),
       },
     });
@@ -330,77 +368,59 @@ router.post("/zapsign/gerar-todos", async (req, res) => {
       return;
     }
 
-    const token = getToken();
-    const tipos = ["Procuração Extra", "Contrato", "Declaração não incidência", "Declaração Hipossuficiência", "Termo de Risco", "Revogação"];
+    const apiToken = getToken();
+    const tipos = [...TIPOS_VALIDOS];
+    const loteGrupoId = crypto.randomUUID();
     const resultados: any[] = [];
 
-    for (const tipo of tipos) {
+    const primeiroPdf = await gerarPdfBuffer(tipos[0], cliente);
+    const primeiroBase64 = primeiroPdf.toString("base64");
+    const primeiroNome = buildFileName(tipos[0], cliente.cpf);
+
+    const principal = await enviarParaZapSign(primeiroBase64, primeiroNome, cliente, apiToken);
+
+    const [regPrincipal] = await db.insert(documentosAssinaturaTable).values({
+      clienteId: clienteId || null,
+      cpf: cliente.cpf.replace(/\D/g, ""),
+      tipoDocumento: tipos[0],
+      nomeArquivo: primeiroNome,
+      zapsignDocToken: principal.token,
+      zapsignSignerToken: principal.signerToken,
+      urlAssinatura: principal.signUrl,
+      statusAssinatura: "pendente",
+      urlPdfOriginal: principal.originalFile,
+      isLotePrincipal: true,
+      loteGrupoId,
+    }).returning();
+
+    resultados.push({ tipo: tipos[0], sucesso: true, id: regPrincipal.id });
+
+    for (let i = 1; i < tipos.length; i++) {
+      const tipo = tipos[i];
       try {
         const pdfBuffer = await gerarPdfBuffer(tipo, cliente);
         const base64Pdf = pdfBuffer.toString("base64");
         const nomeArquivo = buildFileName(tipo, cliente.cpf);
 
-        const zapBody = {
-          sandbox: false,
-          name: nomeArquivo,
-          lang: "pt-br",
-          signers: [{
-            name: cliente.nomeCompleto,
-            email: cliente.email || "",
-            phone_country: "55",
-            phone_number: (cliente.telefone || "").replace(/\D/g, ""),
-            auth_mode: "assinaturaTela",
-            send_automatic_email: false,
-            send_automatic_whatsapp: false,
-          }],
-          doc_base64: base64Pdf,
-        };
+        const extraResult = await anexarDocumentoExtraZapSign(principal.token, nomeArquivo, base64Pdf, apiToken);
 
-        const zapRes = await fetch(`${ZAPSIGN_API}/docs/`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
-          },
-          body: JSON.stringify(zapBody),
-        });
-
-        if (!zapRes.ok) {
-          resultados.push({ tipo, sucesso: false, erro: `Status ${zapRes.status}` });
-          continue;
-        }
-
-        const zapData = await zapRes.json() as {
-          token: string;
-          signers: Array<{ token: string }>;
-          original_file?: string;
-        };
-
-        const [registro] = await db.insert(documentosAssinaturaTable).values({
+        const [reg] = await db.insert(documentosAssinaturaTable).values({
           clienteId: clienteId || null,
           cpf: cliente.cpf.replace(/\D/g, ""),
           tipoDocumento: tipo,
           nomeArquivo,
-          zapsignDocToken: zapData.token,
-          zapsignSignerToken: zapData.signers?.[0]?.token || null,
+          zapsignDocToken: extraResult.token,
+          zapsignSignerToken: principal.signerToken,
+          urlAssinatura: principal.signUrl,
           statusAssinatura: "pendente",
-          urlPdfOriginal: zapData.original_file || null,
+          isLotePrincipal: false,
+          loteGrupoId,
         }).returning();
 
-        resultados.push({
-          tipo,
-          sucesso: true,
-          documento: {
-            id: registro.id,
-            nomeArquivo,
-            statusAssinatura: "pendente",
-            zapsignDocToken: zapData.token,
-            zapsignSignerToken: zapData.signers?.[0]?.token || null,
-            createdAt: registro.createdAt.toISOString(),
-          },
-        });
+        resultados.push({ tipo, sucesso: true, id: reg.id });
       } catch (err) {
-        resultados.push({ tipo, sucesso: false, erro: "Erro interno" });
+        req.log.error(err, `Erro ao anexar doc extra: ${tipo}`);
+        resultados.push({ tipo, sucesso: false, erro: "Erro ao anexar" });
       }
     }
 
@@ -408,9 +428,10 @@ router.post("/zapsign/gerar-todos", async (req, res) => {
     res.json({
       sucesso: falhas === 0,
       parcial: falhas > 0 && falhas < tipos.length,
+      signUrl: principal.signUrl,
       resultados,
       mensagem: falhas === 0
-        ? "Todos os documentos gerados com sucesso"
+        ? "Todos os documentos gerados e vinculados para assinatura"
         : `${tipos.length - falhas} de ${tipos.length} documentos gerados`,
     });
   } catch (err: any) {
@@ -440,6 +461,9 @@ router.get("/zapsign/documentos/:cpf", async (req, res) => {
       statusAssinatura: d.statusAssinatura,
       urlPdfOriginal: d.urlPdfOriginal,
       urlPdfAssinado: d.urlPdfAssinado,
+      urlAssinatura: d.urlAssinatura,
+      isLotePrincipal: d.isLotePrincipal,
+      loteGrupoId: d.loteGrupoId,
       dataAssinatura: d.dataAssinatura?.toISOString() || null,
       createdAt: d.createdAt.toISOString(),
     })));
@@ -457,13 +481,19 @@ router.post("/zapsign/assinar/:id", async (req, res) => {
       res.status(404).json({ mensagem: "Documento não encontrado" });
       return;
     }
-    if (!doc.zapsignSignerToken) {
-      res.status(400).json({ mensagem: "Token de assinatura não disponível" });
+
+    if (doc.urlAssinatura) {
+      res.json({ url: doc.urlAssinatura });
       return;
     }
 
-    const signUrl = `https://app.zapsign.com.br/verificar/${doc.zapsignDocToken}`;
-    res.json({ url: signUrl, signerToken: doc.zapsignSignerToken });
+    if (doc.zapsignDocToken) {
+      const url = `https://app.zapsign.com.br/verificar/${doc.zapsignDocToken}`;
+      res.json({ url });
+      return;
+    }
+
+    res.status(400).json({ mensagem: "Link de assinatura não disponível" });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ mensagem: "Erro ao obter link de assinatura" });
@@ -479,9 +509,9 @@ router.get("/zapsign/status/:id", async (req, res) => {
       return;
     }
 
-    const token = getToken();
+    const apiToken = getToken();
     const zapRes = await fetch(`${ZAPSIGN_API}/docs/${doc.zapsignDocToken}/`, {
-      headers: { "Authorization": `Bearer ${token}` },
+      headers: { "Authorization": `Bearer ${apiToken}` },
     });
 
     if (!zapRes.ok) {
@@ -492,7 +522,6 @@ router.get("/zapsign/status/:id", async (req, res) => {
     const zapData = await zapRes.json() as {
       status: string;
       signed_file?: string;
-      signers?: Array<{ status: string; signed_at?: string }>;
     };
 
     let novoStatus = doc.statusAssinatura;
@@ -524,19 +553,41 @@ router.delete("/zapsign/documento/:id", async (req, res) => {
       return;
     }
 
-    if (doc.zapsignDocToken) {
-      try {
-        const token = getToken();
-        await fetch(`${ZAPSIGN_API}/docs/${doc.zapsignDocToken}/`, {
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${token}` },
-        });
-      } catch {
-      }
-    }
+    if (doc.loteGrupoId) {
+      const loteDocs = await db.select()
+        .from(documentosAssinaturaTable)
+        .where(eq(documentosAssinaturaTable.loteGrupoId, doc.loteGrupoId));
 
-    await db.delete(documentosAssinaturaTable).where(eq(documentosAssinaturaTable.id, id));
-    res.json({ sucesso: true });
+      const principal = loteDocs.find(d => d.isLotePrincipal);
+      if (principal?.zapsignDocToken) {
+        try {
+          const apiToken = getToken();
+          await fetch(`${ZAPSIGN_API}/docs/${principal.zapsignDocToken}/`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${apiToken}` },
+          });
+        } catch {}
+      }
+
+      for (const d of loteDocs) {
+        await db.delete(documentosAssinaturaTable).where(eq(documentosAssinaturaTable.id, d.id));
+      }
+
+      res.json({ sucesso: true, removidos: loteDocs.length });
+    } else {
+      if (doc.zapsignDocToken) {
+        try {
+          const apiToken = getToken();
+          await fetch(`${ZAPSIGN_API}/docs/${doc.zapsignDocToken}/`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${apiToken}` },
+          });
+        } catch {}
+      }
+
+      await db.delete(documentosAssinaturaTable).where(eq(documentosAssinaturaTable.id, id));
+      res.json({ sucesso: true, removidos: 1 });
+    }
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ mensagem: "Erro ao excluir documento" });
@@ -606,7 +657,7 @@ router.post("/zapsign/webhook", async (req, res) => {
 router.post("/zapsign/atualizar-status/:cpf", async (req, res) => {
   try {
     const cpf = req.params.cpf.replace(/\D/g, "");
-    const token = getToken();
+    const apiToken = getToken();
     const documentos = await db
       .select()
       .from(documentosAssinaturaTable)
@@ -620,7 +671,7 @@ router.post("/zapsign/atualizar-status/:cpf", async (req, res) => {
       if (!doc.zapsignDocToken) continue;
       try {
         const zapRes = await fetch(`${ZAPSIGN_API}/docs/${doc.zapsignDocToken}/`, {
-          headers: { "Authorization": `Bearer ${token}` },
+          headers: { "Authorization": `Bearer ${apiToken}` },
         });
         if (!zapRes.ok) continue;
         const zapData = await zapRes.json() as { status: string; signed_file?: string };
