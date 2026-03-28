@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt } from "lucide-react";
+import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt, FileSearch } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -144,6 +144,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <span className={cn("w-1.5 h-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity", item.dot)} />
                 </a>
               ))}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="my-4 border-t border-primary-foreground/10" />
+
+          {/* Pesquisa CPF */}
+          <div>
+            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-primary-foreground/30">
+              Pesquisa
+            </p>
+            <div className="space-y-1">
+              <Link
+                href="/pesquisa-cpf"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group",
+                  location === "/pesquisa-cpf"
+                    ? "bg-primary-foreground/10 text-accent"
+                    : "text-primary-foreground/70 hover:bg-primary-foreground/5 hover:text-primary-foreground"
+                )}
+              >
+                <FileSearch className={cn("h-5 w-5", location === "/pesquisa-cpf" ? "text-accent" : "text-primary-foreground/50 group-hover:text-primary-foreground/80")} />
+                Pesquisa CPF
+              </Link>
             </div>
           </div>
         </nav>
