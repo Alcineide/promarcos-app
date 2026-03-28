@@ -46,7 +46,7 @@ export default function Home() {
           </div>
           <Link
             href="/novo"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md transition-all duration-200"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-[#1c3654] to-[#2a5080] text-white shadow-lg shadow-[#1c3654]/20 hover:shadow-xl hover:shadow-[#1c3654]/30 hover:-translate-y-0.5 active:translate-y-0 active:shadow-md transition-all duration-200"
           >
             <UserPlus className="w-5 h-5" />
             Novo Cliente
@@ -64,7 +64,7 @@ export default function Home() {
               placeholder="Buscar por Nome ou CPF..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 rounded-xl bg-background border-2 border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200 text-lg"
+              className="w-full pl-12 pr-4 py-4 rounded-xl bg-background border-2 border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#5b9bd5] focus:ring-4 focus:ring-[#5b9bd5]/10 transition-all duration-200 text-lg"
             />
           </div>
 

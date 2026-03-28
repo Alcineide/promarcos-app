@@ -13,33 +13,21 @@ const frotaItems = [
     label: "Reserva",
     icon: CalendarCheck,
     href: "https://marcosaurelio.app.n8n.cloud/form/69606561-f9fd-49b9-aca8-78924cf25b28",
-    color: "text-blue-400",
-    hoverBg: "hover:bg-blue-500/10",
-    dot: "bg-blue-400",
   },
   {
     label: "Check-in Retirada",
     icon: LogOut,
     href: "https://marcosaurelio.app.n8n.cloud/form/9ce0c797-66d5-400e-a4aa-5b32db4197bc",
-    color: "text-emerald-400",
-    hoverBg: "hover:bg-emerald-500/10",
-    dot: "bg-emerald-400",
   },
   {
     label: "Check-in Entrega",
     icon: LogIn,
     href: "https://marcosaurelio.app.n8n.cloud/form/21d8688e-d39c-4a80-b2ac-7c8be21e012b",
-    color: "text-amber-400",
-    hoverBg: "hover:bg-amber-500/10",
-    dot: "bg-amber-400",
   },
   {
     label: "Prestação de Contas",
     icon: Receipt,
     href: "https://marcosaurelio.app.n8n.cloud/form/1b1319ca-5a9e-4ff3-bc10-fb910a7dcfa0",
-    color: "text-purple-400",
-    hoverBg: "hover:bg-purple-500/10",
-    dot: "bg-purple-400",
   },
 ];
 
@@ -49,52 +37,52 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row w-full">
-      {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 bg-primary text-primary-foreground">
+      <div className="md:hidden flex items-center justify-between p-4 bg-[#1c3654] text-white shadow-lg">
         <div className="flex items-center gap-3">
           <img
             src="/logo-promarcos.png"
-            alt="Promarcos"
-            className="w-9 h-9 rounded-xl object-cover shadow-lg"
+            alt="Mendes Advocacia"
+            className="w-10 h-10 rounded-xl object-cover"
           />
-          <span className="font-display font-bold text-lg tracking-wide">Promarcos - Clientes</span>
+          <span className="font-display font-bold text-lg tracking-wide">Mendes Advocacia</span>
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-          {isMobileMenuOpen ? <X /> : <Menu />}
+        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
+          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
 
-      {/* Sidebar */}
       <aside
         className={cn(
-          "bg-primary text-primary-foreground w-full md:w-72 flex-shrink-0 flex-col z-50",
+          "w-full md:w-[280px] flex-shrink-0 flex-col z-50",
           "md:flex md:static absolute inset-y-0 left-0 transform transition-transform duration-300 ease-in-out",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
+        style={{
+          background: "linear-gradient(180deg, #1a2e45 0%, #1c3654 40%, #234060 100%)",
+        }}
       >
-        {/* Logo */}
-        <div className="p-8 hidden md:flex flex-col items-center border-b border-primary-foreground/10">
-          <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 mb-4 bg-[#2a4a7a] flex items-center justify-center">
+        <div className="p-6 hidden md:flex flex-col items-center">
+          <div className="w-28 h-28 rounded-2xl overflow-hidden mb-3 bg-[#4a7aab]/20 flex items-center justify-center shadow-2xl shadow-black/40 border border-white/5">
             <img
               src="/logo-promarcos.png"
-              alt="Promarcos"
-              className="w-[150%] h-[150%] object-cover"
-              style={{ objectPosition: "50% 52%", marginTop: "8px" }}
+              alt="Mendes Advocacia"
+              className="w-full h-full object-cover"
             />
           </div>
-          <h1 className="font-display font-bold text-xl tracking-wider text-center leading-tight">
-            Promarcos<br/>
-            <span className="text-sm font-normal text-primary-foreground/70 tracking-widest uppercase">Clientes</span>
+          <h1 className="font-display font-bold text-[17px] tracking-wide text-center text-white/95 leading-tight">
+            Mendes Advocacia
           </h1>
+          <p className="text-[10px] font-medium text-[#6ba3d6] tracking-[0.2em] uppercase mt-1">Promarcos</p>
         </div>
 
-        <nav className="flex-1 py-6 px-4 overflow-y-auto">
-          {/* Clientes section - Cyan/Teal */}
-          <div className="mb-1">
-            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-cyan-400/60">
+        <div className="mx-4 border-t border-white/[0.06]" />
+
+        <nav className="flex-1 py-4 px-3 overflow-y-auto">
+          <div className="mb-5">
+            <p className="px-3 mb-2 text-[10px] font-bold tracking-[0.15em] uppercase text-[#5b9bd5]">
               Clientes
             </p>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {internalNavItems.map((item) => {
                 const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
                 return (
@@ -103,13 +91,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     href={item.href}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group",
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group",
                       isActive
-                        ? "bg-cyan-500/15 text-cyan-300 border-l-2 border-cyan-400"
-                        : "text-primary-foreground/70 hover:bg-cyan-500/10 hover:text-cyan-300"
+                        ? "bg-[#5b9bd5]/15 text-[#8ec5ff] shadow-sm shadow-[#5b9bd5]/10"
+                        : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
                     )}
                   >
-                    <item.icon className={cn("h-5 w-5", isActive ? "text-cyan-400" : "text-primary-foreground/50 group-hover:text-cyan-400")} />
+                    <item.icon className={cn("h-[18px] w-[18px]", isActive ? "text-[#5b9bd5]" : "text-white/30 group-hover:text-[#5b9bd5]/70")} />
                     {item.label}
                   </Link>
                 );
@@ -117,15 +105,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="my-4 border-t border-primary-foreground/10" />
+          <div className="mx-1 mb-5 border-t border-white/[0.06]" />
 
-          {/* Frota section - Orange */}
-          <div>
-            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-orange-400/60">
+          <div className="mb-5">
+            <p className="px-3 mb-2 text-[10px] font-bold tracking-[0.15em] uppercase text-amber-400/70">
               Frota de Veículos
             </p>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {frotaItems.map((item) => (
                 <a
                   key={item.href}
@@ -133,75 +119,70 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group",
-                    "text-primary-foreground/70 hover:text-primary-foreground",
-                    item.hoverBg
-                  )}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group text-white/60 hover:bg-white/[0.04] hover:text-white/90"
                 >
-                  <item.icon className={cn("h-5 w-5 text-primary-foreground/40 group-hover:scale-110 transition-transform", `group-hover:${item.color}`)} />
+                  <item.icon className="h-[18px] w-[18px] text-white/30 group-hover:text-amber-400/70" />
                   <span className="flex-1">{item.label}</span>
-                  <span className={cn("w-1.5 h-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity", item.dot)} />
+                  <span className="w-1 h-1 rounded-full bg-amber-400/0 group-hover:bg-amber-400/60 transition-colors" />
                 </a>
               ))}
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="my-4 border-t border-primary-foreground/10" />
+          <div className="mx-1 mb-5 border-t border-white/[0.06]" />
 
-          {/* Pesquisa Litispendência - Green */}
           <div>
-            <p className="px-4 mb-2 text-[10px] font-semibold tracking-widest uppercase text-green-400/60">
+            <p className="px-3 mb-2 text-[10px] font-bold tracking-[0.15em] uppercase text-emerald-400/70">
               Pesquisa
             </p>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <Link
                 href="/pesquisa-cpf"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group",
                   location === "/pesquisa-cpf"
-                    ? "bg-green-500/15 text-green-300 border-l-2 border-green-400"
-                    : "text-primary-foreground/70 hover:bg-green-500/10 hover:text-green-300"
+                    ? "bg-emerald-500/15 text-emerald-300 shadow-sm shadow-emerald-500/10"
+                    : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
                 )}
               >
-                <FileSearch className={cn("h-5 w-5", location === "/pesquisa-cpf" ? "text-green-400" : "text-primary-foreground/50 group-hover:text-green-400")} />
+                <FileSearch className={cn("h-[18px] w-[18px]", location === "/pesquisa-cpf" ? "text-emerald-400" : "text-white/30 group-hover:text-emerald-400/70")} />
                 Pesquisa de Litispendência
               </Link>
             </div>
           </div>
-
-
         </nav>
 
-        <div className="p-4 border-t border-primary-foreground/10 space-y-2">
+        <div className="p-3 space-y-2">
+          <div className="mx-1 border-t border-white/[0.06] mb-2" />
           <a
             href={`${import.meta.env.BASE_URL}api/download-projeto`}
             onClick={() => setIsMobileMenuOpen(false)}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-primary-foreground/70 hover:bg-emerald-500/10 hover:text-emerald-400"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group text-white/50 hover:bg-white/[0.04] hover:text-white/80"
           >
-            <Download className="h-5 w-5 text-primary-foreground/50 group-hover:text-emerald-400" />
-            Baixar Projeto (JSON)
+            <Download className="h-[18px] w-[18px] text-white/25 group-hover:text-white/50" />
+            Baixar Projeto
           </a>
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary-foreground/5">
-            <img
-              src="/logo-promarcos.png"
-              alt="Promarcos"
-              className="w-8 h-8 rounded-full object-cover"
-            />
+          <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-white/[0.03]">
+            <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#4a7aab]/20 flex items-center justify-center">
+              <img
+                src="/logo-promarcos.png"
+                alt="Mendes"
+                className="w-full h-full object-cover"
+              />
+            </div>
             <div className="flex flex-col">
-              <span className="text-sm font-semibold">Promarcos</span>
-              <span className="text-xs text-primary-foreground/50">Sistema de Gestão Jurídica</span>
+              <span className="text-xs font-semibold text-white/80">Mendes Advocacia</span>
+              <span className="text-[10px] text-white/35">Gestão Jurídica</span>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 animate-fade-in relative">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#5b9bd5]/[0.03] rounded-full blur-3xl -z-10 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-[#1c3654]/[0.03] rounded-full blur-3xl -z-10 pointer-events-none" />
           {children}
         </div>
       </main>

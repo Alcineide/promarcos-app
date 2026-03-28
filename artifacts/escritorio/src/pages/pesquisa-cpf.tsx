@@ -207,7 +207,7 @@ export default function PesquisaCpf() {
                     onChange={(e) => setCpf(formatCpf(e.target.value))}
                     onKeyDown={handleKeyDown}
                     placeholder="000.000.000-00"
-                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 font-mono"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-[#5b9bd5]/30 focus:border-[#5b9bd5]/50 font-mono transition-all"
                   />
                 </div>
 
@@ -219,7 +219,7 @@ export default function PesquisaCpf() {
                     onChange={(e) => setDataNascimento(formatDate(e.target.value))}
                     onKeyDown={handleKeyDown}
                     placeholder="dd/mm/aaaa"
-                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 font-mono"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-[#5b9bd5]/30 focus:border-[#5b9bd5]/50 font-mono transition-all"
                   />
                 </div>
 
@@ -230,7 +230,7 @@ export default function PesquisaCpf() {
                 <button
                   onClick={handlePesquisar}
                   disabled={pesquisando || !cpf.trim()}
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 disabled:cursor-not-allowed text-white font-bold text-sm py-2 px-3 rounded transition-colors duration-200"
+                  className="w-full bg-[#3a7abd] hover:bg-[#2d6aaa] disabled:bg-[#3a7abd]/50 disabled:cursor-not-allowed text-white font-bold text-sm py-2 px-3 rounded-lg transition-colors duration-200 shadow-sm"
                 >
                   {pesquisando ? "Pesquisando..." : "Pesquisar CPF"}
                 </button>
