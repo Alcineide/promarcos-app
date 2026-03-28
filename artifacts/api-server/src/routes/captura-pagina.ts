@@ -193,6 +193,20 @@ async function automacaoTrf1Processual(page: import("puppeteer-core").Page, cpf:
     await page.waitForSelector('table, .resultado, .listagem, .alert, #divResultado', { timeout: 10000 }).catch(() => null);
     await new Promise(r => setTimeout(r, 2000));
   }
+
+  await page.evaluate(async () => {
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+    let prev = 0;
+    let curr = document.body.scrollHeight;
+    while (curr !== prev) {
+      window.scrollTo(0, curr);
+      await delay(500);
+      prev = curr;
+      curr = document.body.scrollHeight;
+    }
+    window.scrollTo(0, 0);
+  });
+  await new Promise(r => setTimeout(r, 1000));
 }
 
 async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
@@ -231,10 +245,9 @@ async function capturarPagina(siteKey: string, cpf: string): Promise<Buffer> {
       margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
     };
 
-    if (config.automacao === "pje_trf1") {
+    if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
       const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
-      const pageWidthPx = 1280;
-      pdfOptions.width = `${pageWidthPx}px`;
+      pdfOptions.width = "1280px";
       pdfOptions.height = `${bodyHeight + 40}px`;
     } else {
       pdfOptions.format = "A4";
@@ -297,7 +310,7 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
         margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
       };
 
-      if (config.automacao === "pje_trf1") {
+      if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
         const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
         consultaPdfOptions.width = "1280px";
         consultaPdfOptions.height = `${bodyHeight + 40}px`;
@@ -401,7 +414,7 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
             footerTemplate: '<div style="font-size:8px;text-align:center;width:100%;color:#999;">Promarcos - Mendes Advocacia | Página <span class="pageNumber"></span></div>',
           };
 
-          if (config.automacao === "pje_trf1") {
+          if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
             const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
             todasPdfOpts.width = "1280px";
             todasPdfOpts.height = `${bodyHeight + 40}px`;
