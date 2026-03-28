@@ -111,9 +111,23 @@ export default function PesquisaCpf() {
     return consulta.key;
   }
 
+  const [erroPdf, setErroPdf] = useState("");
+
+  function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   async function handleBaixarPdf(index: number) {
     const r = resultados[index];
     setResultados((prev) => prev.map((item, i) => i === index ? { ...item, baixando: true } : item));
+    setErroPdf("");
     try {
       const siteKey = getSiteKey(r.local);
       let res: Response;
@@ -134,16 +148,14 @@ export default function PesquisaCpf() {
 
       if (res.ok) {
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `pesquisa_${r.local.replace(/[^a-zA-Z0-9]/g, "_")}_${cpf.replace(/\D/g, "")}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, `pesquisa_${r.local.replace(/[^a-zA-Z0-9]/g, "_")}_${cpf.replace(/\D/g, "")}.pdf`);
+      } else {
+        setErroPdf(`Erro ao gerar PDF de ${r.local}`);
       }
-    } catch { /* silently fail */ }
+    } catch (err) {
+      console.error("Erro ao baixar PDF:", err);
+      setErroPdf(`Erro ao gerar PDF de ${r.local}. Tente novamente.`);
+    }
     setResultados((prev) => prev.map((item, i) => i === index ? { ...item, baixando: false } : item));
   }
 
@@ -152,6 +164,7 @@ export default function PesquisaCpf() {
   async function handleBaixarTodos() {
     if (resultados.length === 0) return;
     setBaixandoTodos(true);
+    setErroPdf("");
     try {
       const siteKeys = resultados
         .map(r => getSiteKey(r.local))
@@ -165,16 +178,14 @@ export default function PesquisaCpf() {
 
       if (res.ok) {
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `capturas_completas_${cpf.replace(/\D/g, "")}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, `capturas_completas_${cpf.replace(/\D/g, "")}.pdf`);
+      } else {
+        setErroPdf("Erro ao gerar PDFs. Tente novamente.");
       }
-    } catch { /* silently fail */ }
+    } catch (err) {
+      console.error("Erro ao baixar todos:", err);
+      setErroPdf("Erro ao gerar PDFs. Tente novamente.");
+    }
     setBaixandoTodos(false);
   }
 
@@ -364,13 +375,22 @@ export default function PesquisaCpf() {
                           <button
                             onClick={() => handleBaixarPdf(i)}
                             disabled={r.baixando}
-                            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors text-xs font-medium disabled:opacity-50"
+                            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-wait"
                           >
-                            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                              <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
-                              <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
-                            </svg>
-                            {r.baixando ? "..." : "PDF"}
+                            {r.baixando ? (
+                              <>
+                                <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                                <span className="animate-pulse">Capturando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                                  <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+                                  <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+                                </svg>
+                                PDF
+                              </>
+                            )}
                           </button>
                         </div>
                       </div>
@@ -383,6 +403,12 @@ export default function PesquisaCpf() {
                 )}
               </div>
 
+              {erroPdf && (
+                <div className="px-3 py-2 bg-red-500/10 border-t border-red-500/20">
+                  <p className="text-xs text-red-400">{erroPdf}</p>
+                </div>
+              )}
+
               {pesquisaFeita && resultados.length > 0 && (
                 <div className="p-3 border-t border-border bg-muted/20 flex justify-end">
                   <button
@@ -394,7 +420,7 @@ export default function PesquisaCpf() {
                       <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
                       <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
                     </svg>
-                    {baixandoTodos ? "Gerando..." : "Baixar Todos em PDF"}
+                    {baixandoTodos ? "Capturando páginas... aguarde" : "Baixar Todos em PDF"}
                   </button>
                 </div>
               )}
