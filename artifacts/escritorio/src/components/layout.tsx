@@ -4,7 +4,6 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const internalNavItems = [
-  { href: "/", label: "Busca de Clientes", icon: Search },
   { href: "/novo", label: "Novo Cliente", icon: Users },
 ];
 

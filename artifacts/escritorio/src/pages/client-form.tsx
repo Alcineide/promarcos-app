@@ -209,6 +209,56 @@ export default function ClientForm() {
     }
   }, [promarcosCodigo]);
 
+  const estadoCivilMap: Record<string, string> = {
+    "Solteiro": "Solteiro", "Solteiro(a)": "Solteiro", "solteiro": "Solteiro",
+    "Casado": "Casado", "Casado(a)": "Casado", "casado": "Casado",
+    "Divorciado": "Divorciado", "Divorciado(a)": "Divorciado", "divorciado": "Divorciado",
+    "Viúvo": "Viúvo", "Viúvo(a)": "Viúvo", "viúvo": "Viúvo", "Viuvo": "Viúvo", "Viuvo(a)": "Viúvo",
+    "União Estável": "União Estável", "União estável": "União Estável", "união estável": "União Estável", "Uniao Estavel": "União Estável",
+  };
+  const estadoMap: Record<string, string> = {
+    "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM", "Bahia": "BA",
+    "Ceará": "CE", "Distrito Federal": "DF", "Espírito Santo": "ES", "Goiás": "GO",
+    "Maranhão": "MA", "Mato Grosso": "MT", "Mato Grosso do Sul": "MS", "Minas Gerais": "MG",
+    "Pará": "PA", "Paraíba": "PB", "Paraná": "PR", "Pernambuco": "PE", "Piauí": "PI",
+    "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN", "Rio Grande do Sul": "RS",
+    "Rondônia": "RO", "Roraima": "RR", "Santa Catarina": "SC", "São Paulo": "SP",
+    "Sergipe": "SE", "Tocantins": "TO",
+  };
+
+  const fillFormFromPromarcos = (p: PromarkosPessoa, cpfRaw: string) => {
+    const nascFormatted = p.nascimento
+      ? (() => {
+          const d = new Date(p.nascimento!);
+          return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+        })()
+      : "";
+    const sexoLabel = p.sexo === "M" ? "Masculino" : p.sexo === "F" ? "Feminino" : p.sexo || "";
+    setValue("cpf", formatCPF(cpfRaw));
+    setValue("nomeCompleto", p.razao_social || "");
+    setValue("dataNascimento", nascFormatted);
+    setValue("sexo", sexoLabel);
+    const ecRaw = (p.estado_civil || "").trim();
+    setValue("estadoCivil", estadoCivilMap[ecRaw] || ecRaw);
+    setValue("rgRepresentante", p.rg || "");
+    setValue("orgaoEmissor", p.orgaoemissor || "");
+    setValue("profissao", p.profissao || "");
+    setValue("telefone", p.telefone1 || "");
+    setValue("telefone2", p.telefone2 || "");
+    setValue("email", p.email1 || "");
+    setValue("cep", p.cep ? formatCEP(p.cep) : "");
+    setValue("logradouro", p.logradouro || "");
+    setValue("numero", p.numero || "");
+    setValue("complemento", p.complemento || "");
+    setValue("bairro", p.bairro || "");
+    setValue("cidade", p.cidade || "");
+    const ufRaw = (p.estado || "").trim();
+    setValue("estado", estadoMap[ufRaw] || ufRaw);
+    setCpfCheckResult({ existe: true, pessoa: p });
+    setPromarcosCodigo(p.codigo);
+    setPromarkosPreloaded(true);
+  };
+
   // --- Auto-load from URL ?cpf= param ---
   useEffect(() => {
     if (!cpfFromUrl || isEditing) return;
@@ -217,53 +267,7 @@ export default function ClientForm() {
       try {
         const result = await buscarPorCpf(cpfFromUrl);
         if (result.existe && result.pessoas.length > 0) {
-          const p = result.pessoas[0];
-          setCpfCheckResult({ existe: true, pessoa: p });
-          setPromarcosCodigo(p.codigo);
-          const nascFormatted = p.nascimento
-            ? (() => {
-                const d = new Date(p.nascimento!);
-                return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-              })()
-            : "";
-          const sexoLabel = p.sexo === "M" ? "Masculino" : p.sexo === "F" ? "Feminino" : p.sexo || "";
-          setValue("cpf", formatCPF(cpfFromUrl));
-          setValue("nomeCompleto", p.razao_social || "");
-          setValue("dataNascimento", nascFormatted);
-          setValue("sexo", sexoLabel);
-          const ecRaw = (p.estado_civil || "").trim();
-          const ecMap: Record<string, string> = {
-            "Solteiro": "Solteiro", "Solteiro(a)": "Solteiro", "solteiro": "Solteiro",
-            "Casado": "Casado", "Casado(a)": "Casado", "casado": "Casado",
-            "Divorciado": "Divorciado", "Divorciado(a)": "Divorciado", "divorciado": "Divorciado",
-            "Viúvo": "Viúvo", "Viúvo(a)": "Viúvo", "viúvo": "Viúvo", "Viuvo": "Viúvo", "Viuvo(a)": "Viúvo",
-            "União Estável": "União Estável", "União estável": "União Estável", "união estável": "União Estável", "Uniao Estavel": "União Estável",
-          };
-          setValue("estadoCivil", ecMap[ecRaw] || ecRaw);
-          setValue("rgRepresentante", p.rg || "");
-          setValue("orgaoEmissor", p.orgaoemissor || "");
-          setValue("profissao", p.profissao || "");
-          setValue("telefone", p.telefone1 || "");
-          setValue("telefone2", p.telefone2 || "");
-          setValue("email", p.email1 || "");
-          setValue("cep", p.cep ? formatCEP(p.cep) : "");
-          setValue("logradouro", p.logradouro || "");
-          setValue("numero", p.numero || "");
-          setValue("complemento", p.complemento || "");
-          setValue("bairro", p.bairro || "");
-          setValue("cidade", p.cidade || "");
-          const estadoMap: Record<string, string> = {
-            "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM", "Bahia": "BA",
-            "Ceará": "CE", "Distrito Federal": "DF", "Espírito Santo": "ES", "Goiás": "GO",
-            "Maranhão": "MA", "Mato Grosso": "MT", "Mato Grosso do Sul": "MS", "Minas Gerais": "MG",
-            "Pará": "PA", "Paraíba": "PB", "Paraná": "PR", "Pernambuco": "PE", "Piauí": "PI",
-            "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN", "Rio Grande do Sul": "RS",
-            "Rondônia": "RO", "Roraima": "RR", "Santa Catarina": "SC", "São Paulo": "SP",
-            "Sergipe": "SE", "Tocantins": "TO",
-          };
-          const ufRaw = (p.estado || "").trim();
-          setValue("estado", estadoMap[ufRaw] || ufRaw);
-          setPromarkosPreloaded(true);
+          fillFormFromPromarcos(result.pessoas[0], cpfFromUrl);
         } else {
           setValue("cpf", formatCPF(cpfFromUrl));
           setCpfCheckResult({ existe: false });
@@ -277,33 +281,44 @@ export default function ClientForm() {
     load();
   }, [cpfFromUrl, isEditing]);
 
-  // --- CPF watch → check Promarcos (only for manual typing) ---
+  // --- CPF watch → check Promarcos and auto-fill ---
   const cpfValue = watch("cpf");
+  const cpfRequestIdRef = useRef(0);
   useEffect(() => {
+    if (cpfTimerRef.current) clearTimeout(cpfTimerRef.current);
     if (isEditing || promarkosPreloaded) return;
     const cpfNums = cpfValue?.replace(/\D/g, "") || "";
     if (cpfNums.length !== 11) {
       setCpfCheckResult(null);
       return;
     }
-    if (cpfTimerRef.current) clearTimeout(cpfTimerRef.current);
+    const requestId = ++cpfRequestIdRef.current;
     cpfTimerRef.current = setTimeout(async () => {
       setCpfChecking(true);
       try {
         const result = await buscarPorCpf(cpfNums);
+        if (requestId !== cpfRequestIdRef.current) return;
+        const currentCpf = getValues("cpf")?.replace(/\D/g, "") || "";
+        if (currentCpf !== cpfNums) return;
         if (result.existe && result.pessoas.length > 0) {
-          setCpfCheckResult({ existe: true, pessoa: result.pessoas[0] });
-          setPromarcosCodigo(result.pessoas[0].codigo);
+          fillFormFromPromarcos(result.pessoas[0], cpfNums);
         } else {
           setCpfCheckResult({ existe: false });
           setPromarcosCodigo(null);
         }
       } catch {
-        setCpfCheckResult(null);
+        if (requestId === cpfRequestIdRef.current) {
+          setCpfCheckResult(null);
+        }
       } finally {
-        setCpfChecking(false);
+        if (requestId === cpfRequestIdRef.current) {
+          setCpfChecking(false);
+        }
       }
     }, 600);
+    return () => {
+      if (cpfTimerRef.current) clearTimeout(cpfTimerRef.current);
+    };
   }, [cpfValue, isEditing, promarkosPreloaded]);
 
   // --- Masks & External API ---
@@ -844,10 +859,10 @@ export default function ClientForm() {
             </Link>
             <div>
               <h1 className="text-3xl font-display font-bold text-primary">
-                {isEditing ? "Editar Cliente" : promarkosPreloaded ? "Atualizar Cadastro" : "Novo Cadastro"}
+                {isEditing ? "Editar Cliente" : "Novo Cadastro"}
               </h1>
               {isEditing && <p className="text-muted-foreground">ID: #{clientId} • {clientData?.nomeCompleto}</p>}
-              {promarkosPreloaded && cpfCheckResult?.pessoa && (
+              {!isEditing && promarkosPreloaded && cpfCheckResult?.pessoa && (
                 <p className="text-muted-foreground font-medium">{cpfCheckResult.pessoa.razao_social}</p>
               )}
             </div>
@@ -867,8 +882,8 @@ export default function ClientForm() {
         <div className="flex space-x-1 bg-muted/50 p-1.5 rounded-2xl mb-8 overflow-x-auto">
           {[
             { id: "cadastro", label: "Dados Cadastrais" },
-            { id: "processos", label: "Processos", disabled: !isEditing },
-            { id: "documentos", label: "Docs e Anexos", disabled: !isEditing },
+            { id: "processos", label: "Processos", disabled: !isEditing && !promarkosPreloaded },
+            { id: "documentos", label: "Docs e Anexos", disabled: !isEditing && !promarkosPreloaded },
           ].map(tab => (
             <button
               key={tab.id}
@@ -919,45 +934,6 @@ export default function ClientForm() {
                   <User className="w-5 h-5 text-primary" /> Dados Pessoais
                 </h2>
 
-                {/* CPF Promarcos Alert */}
-                {!isEditing && promarkosPreloaded && cpfCheckResult?.pessoa && (
-                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 rounded-xl bg-blue-50 border-2 border-blue-200 flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-blue-800 text-sm">Dados carregados do Promarcos</p>
-                      <p className="text-blue-600 text-sm mt-0.5">Confira e atualize as informações abaixo. O CPF não pode ser alterado.</p>
-                    </div>
-                  </motion.div>
-                )}
-                {!isEditing && !promarkosPreloaded && cpfCheckResult?.existe && cpfCheckResult.pessoa && (
-                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 rounded-xl bg-amber-50 border-2 border-amber-300 flex flex-col gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-amber-600 font-bold text-sm">!</span>
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-bold text-amber-800 text-sm">CPF já cadastrado no Promarcos</p>
-                        <p className="text-amber-700 text-sm mt-0.5">
-                          <span className="font-semibold">{cpfCheckResult.pessoa.razao_social}</span>
-                          {cpfCheckResult.pessoa.cidade && ` — ${cpfCheckResult.pessoa.cidade}/${cpfCheckResult.pessoa.estado}`}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-amber-700 bg-amber-100/60 rounded-lg p-3">
-                      {cpfCheckResult.pessoa.telefone1 && <span><b>Tel:</b> {cpfCheckResult.pessoa.telefone1}</span>}
-                      {cpfCheckResult.pessoa.profissao && <span><b>Prof:</b> {cpfCheckResult.pessoa.profissao}</span>}
-                      {cpfCheckResult.pessoa.estado_civil && <span><b>Civil:</b> {cpfCheckResult.pessoa.estado_civil}</span>}
-                      {cpfCheckResult.pessoa.cep && <span><b>CEP:</b> {cpfCheckResult.pessoa.cep}</span>}
-                    </div>
-                    <p className="text-xs text-amber-600">Você pode continuar o cadastro — os dados serão atualizados no Promarcos.</p>
-                  </motion.div>
-                )}
-                {!isEditing && cpfCheckResult?.existe === false && cpfValue?.replace(/\D/g, "").length === 11 && (
-                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-3 rounded-xl bg-green-50 border-2 border-green-200 flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-                    <p className="text-green-700 text-sm font-medium">CPF livre — não há cadastro no Promarcos para este CPF.</p>
-                  </motion.div>
-                )}
                 {!isEditing && cpfChecking && (
                   <div className="mb-6 p-3 rounded-xl bg-blue-50 border-2 border-blue-100 flex items-center gap-3">
                     <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
@@ -1081,7 +1057,7 @@ export default function ClientForm() {
             </motion.div>
           )}
 
-          {activeTab === "processos" && isEditing && (
+          {activeTab === "processos" && (isEditing || promarkosPreloaded) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
 
               {/* Promarcos Processes Section */}
@@ -1204,7 +1180,7 @@ export default function ClientForm() {
             </motion.div>
           )}
 
-          {activeTab === "documentos" && isEditing && (
+          {activeTab === "documentos" && (isEditing || promarkosPreloaded) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               
               {/* Pasta Local */}

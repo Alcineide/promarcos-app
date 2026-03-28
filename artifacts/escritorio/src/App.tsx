@@ -4,10 +4,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
-import Home from "./pages/home";
 import ClientForm from "./pages/client-form";
 import Veiculos from "./pages/veiculos";
 import PesquisaCpf from "./pages/pesquisa-cpf";
+import { Redirect } from "wouter";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,7 +21,7 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/">{() => <Redirect to="/novo" />}</Route>
       <Route path="/novo" component={ClientForm} />
       <Route path="/cliente/:id" component={ClientForm} />
       <Route path="/veiculos" component={Veiculos} />
