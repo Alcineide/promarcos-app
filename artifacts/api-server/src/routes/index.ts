@@ -7,6 +7,7 @@ import downloadProjetoRouter from "./download-projeto";
 import documentosRouter from "./documentos";
 import zapsignRouter from "./zapsign";
 import auditRouter from "./audit";
+import usuariosRouter from "./usuarios";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(downloadProjetoRouter);
 router.use(documentosRouter);
 router.use(zapsignRouter);
 router.use(auditRouter);
+router.use(usuariosRouter);
 
 export default router;

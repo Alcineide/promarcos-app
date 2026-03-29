@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt, FileSearch, Download, Power } from "lucide-react";
+import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt, FileSearch, Download, Power, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -34,7 +34,7 @@ const frotaItems = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row w-full">
@@ -153,6 +153,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </nav>
+
+        {isAdmin && (
+          <div className="px-3 pb-2">
+            <div className="mx-1 mb-3 border-t border-white/[0.06]" />
+            <p className="px-3 mb-2 text-[10px] font-bold tracking-[0.15em] uppercase text-red-400/70">
+              Administração
+            </p>
+            <Link
+              href="/admin/usuarios"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group",
+                location === "/admin/usuarios"
+                  ? "bg-red-500/15 text-red-300 shadow-sm shadow-red-500/10"
+                  : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
+              )}
+            >
+              <ShieldCheck className={cn("h-[18px] w-[18px]", location === "/admin/usuarios" ? "text-red-400" : "text-white/30 group-hover:text-red-400/70")} />
+              Gerenciar Usuários
+            </Link>
+          </div>
+        )}
 
         <div className="p-3 space-y-2">
           <div className="mx-1 border-t border-white/[0.06] mb-2" />
