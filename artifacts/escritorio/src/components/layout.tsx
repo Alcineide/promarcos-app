@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt, FileSearch, Download, Power, ShieldCheck, Activity } from "lucide-react";
+import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt, FileSearch, Download, Power, ShieldCheck, Activity, Monitor } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -186,6 +186,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 <Activity className={cn("h-[18px] w-[18px]", location === "/admin/auditoria" ? "text-red-400" : "text-white/30 group-hover:text-red-400/70")} />
                 Auditoria
+              </Link>
+              <Link
+                href="/admin/luana2026"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group",
+                  location === "/admin/luana2026"
+                    ? "bg-red-500/15 text-red-300 shadow-sm shadow-red-500/10"
+                    : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
+                )}
+              >
+                <Monitor className={cn("h-[18px] w-[18px]", location === "/admin/luana2026" ? "text-red-400" : "text-white/30 group-hover:text-red-400/70")} />
+                Luana 2026
               </Link>
               <button
                 onClick={async () => {

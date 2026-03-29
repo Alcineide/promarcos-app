@@ -9,6 +9,7 @@ import zapsignRouter from "./zapsign";
 import auditRouter from "./audit";
 import usuariosRouter from "./usuarios";
 import deviceSessionsRouter from "./device-sessions";
+import luana2026Router from "./luana2026";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(zapsignRouter);
 router.use(auditRouter);
 router.use(usuariosRouter);
 router.use(deviceSessionsRouter);
+router.use(luana2026Router);
 
 export default router;
