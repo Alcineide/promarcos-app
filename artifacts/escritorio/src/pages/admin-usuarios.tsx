@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth-context";
-import { Shield, ShieldCheck, UserPlus, Trash2, Loader2, Crown, UserCog, ToggleLeft, ToggleRight } from "lucide-react";
+import { Shield, ShieldCheck, UserPlus, Trash2, Loader2, Crown, UserCog, ToggleLeft, ToggleRight, Smartphone, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,14 @@ interface Usuario {
   createdAt?: string;
 }
 
+interface DeviceInfo {
+  id: number;
+  deviceId: string;
+  deviceName: string | null;
+  lastSeenAt: string;
+  createdAt: string;
+}
+
 export default function AdminUsuarios() {
   const { user, isSuperAdmin } = useAuth();
   const { toast } = useToast();
@@ -26,6 +34,10 @@ export default function AdminUsuarios() {
   const [novoNome, setNovoNome] = useState("");
   const [novoRole, setNovoRole] = useState("user");
   const [showForm, setShowForm] = useState(false);
+
+  const [expandedUser, setExpandedUser] = useState<number | null>(null);
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
 
   const fetchUsuarios = useCallback(async () => {
     try {
@@ -47,6 +59,46 @@ export default function AdminUsuarios() {
   useEffect(() => {
     fetchUsuarios();
   }, [fetchUsuarios]);
+
+  const fetchDevices = async (email: string) => {
+    setLoadingDevices(true);
+    try {
+      const res = await fetch(`/api/auth/devices/${encodeURIComponent(email)}`, {
+        headers: { "x-user-email": user?.email || "" },
+      });
+      if (res.ok) {
+        setDevices(await res.json());
+      }
+    } catch {} finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  const handleToggleExpand = (u: Usuario) => {
+    if (expandedUser === u.id) {
+      setExpandedUser(null);
+      setDevices([]);
+    } else {
+      setExpandedUser(u.id);
+      fetchDevices(u.email);
+    }
+  };
+
+  const handleRevokeDevice = async (deviceSessionId: number) => {
+    try {
+      const res = await fetch(`/api/auth/devices/${deviceSessionId}`, {
+        method: "DELETE",
+        headers: { "x-user-email": user?.email || "" },
+      });
+      if (res.ok) {
+        toast({ title: "Sucesso", description: "Dispositivo desautorizado." });
+        const u = usuarios.find((u) => u.id === expandedUser);
+        if (u) fetchDevices(u.email);
+      }
+    } catch {
+      toast({ title: "Erro", description: "Falha ao desautorizar.", variant: "destructive" });
+    }
+  };
 
   const handleAdd = async () => {
     if (!novoEmail.trim() || !novoNome.trim()) {
@@ -145,6 +197,13 @@ export default function AdminUsuarios() {
     }
   };
 
+  const formatDate = (iso: string) => {
+    return new Date(iso).toLocaleDateString("pt-BR", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  };
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto space-y-8">
@@ -156,8 +215,11 @@ export default function AdminUsuarios() {
             </h1>
             <p className="text-muted-foreground text-lg">
               {isSuperAdmin
-                ? "Gerencie os acessos e permissões de administradores."
+                ? "Gerencie os acessos, permissões e dispositivos."
                 : "Visualize os usuários do sistema."}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Limite: 2 dispositivos por usuário. Clique em um usuário para ver os dispositivos.
             </p>
           </div>
           <button
@@ -228,7 +290,7 @@ export default function AdminUsuarios() {
               <div
                 key={u.id}
                 className={cn(
-                  "bg-card rounded-2xl p-5 shadow-sm border transition-all",
+                  "bg-card rounded-2xl shadow-sm border transition-all",
                   u.isSuperAdmin
                     ? "border-amber-300 bg-amber-50/50"
                     : u.role === "admin"
@@ -237,7 +299,10 @@ export default function AdminUsuarios() {
                   !u.ativo && "opacity-60"
                 )}
               >
-                <div className="flex items-center justify-between gap-4">
+                <div
+                  className="p-5 flex items-center justify-between gap-4 cursor-pointer"
+                  onClick={() => handleToggleExpand(u)}
+                >
                   <div className="flex items-center gap-4 min-w-0">
                     <div
                       className={cn(
@@ -280,46 +345,89 @@ export default function AdminUsuarios() {
                     </div>
                   </div>
 
-                  {!u.isSuperAdmin && (
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {isSuperAdmin && (
-                        <button
-                          onClick={() => handleToggleRole(u)}
-                          title={u.role === "admin" ? "Remover admin" : "Tornar admin"}
-                          className={cn(
-                            "px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5",
-                            u.role === "admin"
-                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                              : "bg-muted text-muted-foreground hover:bg-muted/80"
-                          )}
-                        >
-                          <Shield className="w-3.5 h-3.5" />
-                          {u.role === "admin" ? "Admin" : "Usuário"}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleToggleAtivo(u)}
-                        title={u.ativo ? "Desativar" : "Ativar"}
-                        className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
-                      >
-                        {u.ativo ? (
-                          <ToggleRight className="w-5 h-5 text-green-500" />
-                        ) : (
-                          <ToggleLeft className="w-5 h-5 text-red-400" />
+                  <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {!u.isSuperAdmin && (
+                      <>
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => handleToggleRole(u)}
+                            title={u.role === "admin" ? "Remover admin" : "Tornar admin"}
+                            className={cn(
+                              "px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5",
+                              u.role === "admin"
+                                ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                : "bg-muted text-muted-foreground hover:bg-muted/80"
+                            )}
+                          >
+                            <Shield className="w-3.5 h-3.5" />
+                            {u.role === "admin" ? "Admin" : "Usuário"}
+                          </button>
                         )}
-                      </button>
-                      {isSuperAdmin && (
                         <button
-                          onClick={() => handleDelete(u)}
-                          title="Remover usuário"
-                          className="p-2 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                          onClick={() => handleToggleAtivo(u)}
+                          title={u.ativo ? "Desativar" : "Ativar"}
+                          className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {u.ativo ? (
+                            <ToggleRight className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <ToggleLeft className="w-5 h-5 text-red-400" />
+                          )}
                         </button>
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => handleDelete(u)}
+                            title="Remover usuário"
+                            className="p-2 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {expandedUser === u.id && (
+                  <div className="px-5 pb-5 border-t border-border/30">
+                    <div className="pt-4">
+                      <h3 className="text-sm font-bold text-muted-foreground mb-3 flex items-center gap-2">
+                        <Smartphone className="w-4 h-4" />
+                        Dispositivos Autorizados (máx. 2)
+                      </h3>
+                      {loadingDevices ? (
+                        <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                      ) : devices.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nenhum dispositivo registrado.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {devices.map((d) => (
+                            <div key={d.id} className="flex items-center justify-between gap-3 p-3 bg-muted/30 rounded-xl">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <Smartphone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium truncate">
+                                    {d.deviceName || "Dispositivo desconhecido"}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Último acesso: {formatDate(d.lastSeenAt)}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleRevokeDevice(d.id)}
+                                title="Desautorizar dispositivo"
+                                className="p-1.5 rounded-lg hover:bg-red-100 text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             ))}
 

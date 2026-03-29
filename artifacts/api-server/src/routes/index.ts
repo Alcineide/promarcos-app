@@ -8,6 +8,7 @@ import documentosRouter from "./documentos";
 import zapsignRouter from "./zapsign";
 import auditRouter from "./audit";
 import usuariosRouter from "./usuarios";
+import deviceSessionsRouter from "./device-sessions";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(documentosRouter);
 router.use(zapsignRouter);
 router.use(auditRouter);
 router.use(usuariosRouter);
+router.use(deviceSessionsRouter);
 
 export default router;

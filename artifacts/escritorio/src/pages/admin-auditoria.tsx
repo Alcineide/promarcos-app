@@ -1,22 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth-context";
 import {
   Activity,
-  Search,
   ChevronLeft,
   ChevronRight,
-  Filter,
-  MapPin,
-  Smartphone,
-  Clock,
-  User,
-  FileText,
-  UserPlus,
-  Eye,
-  Upload,
+  Download,
   Loader2,
-  X,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -36,30 +27,32 @@ interface AuditLog {
   syncedAt: string | null;
 }
 
-const TIPO_ACAO_LABELS: Record<string, { label: string; icon: typeof Activity; color: string }> = {
-  consulta: { label: "Consulta", icon: Eye, color: "text-blue-500 bg-blue-50" },
-  alteracao: { label: "Alteração", icon: FileText, color: "text-amber-500 bg-amber-50" },
-  cadastro_novo: { label: "Novo Cadastro", icon: UserPlus, color: "text-green-500 bg-green-50" },
-  upload_documento: { label: "Upload Documento", icon: Upload, color: "text-purple-500 bg-purple-50" },
-  pesquisa_cpf: { label: "Pesquisa CPF", icon: Search, color: "text-teal-500 bg-teal-50" },
+const TIPO_LABELS: Record<string, string> = {
+  consulta: "Consulta",
+  alteracao: "Alteração",
+  cadastro_novo: "Novo Cadastro",
+  upload_documento: "Upload",
+  pesquisa_cpf: "Pesquisa CPF",
 };
 
-const PAGE_SIZE = 30;
+const TIPO_COLORS: Record<string, string> = {
+  consulta: "bg-blue-100 text-blue-700",
+  alteracao: "bg-amber-100 text-amber-700",
+  cadastro_novo: "bg-green-100 text-green-700",
+  upload_documento: "bg-purple-100 text-purple-700",
+  pesquisa_cpf: "bg-teal-100 text-teal-700",
+};
+
+const PAGE_SIZE = 50;
 
 export default function AdminAuditoria() {
   const { user } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [page, setPage] = useState(0);
-
-  const [filtroColaborador, setFiltroColaborador] = useState("");
-  const [filtroCpf, setFiltroCpf] = useState("");
-  const [filtroTipo, setFiltroTipo] = useState("");
-  const [filtroDe, setFiltroDe] = useState("");
-  const [filtroAte, setFiltroAte] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [expandedLog, setExpandedLog] = useState<number | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -67,11 +60,6 @@ export default function AdminAuditoria() {
       const params = new URLSearchParams();
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(page * PAGE_SIZE));
-      if (filtroColaborador) params.set("colaborador", filtroColaborador);
-      if (filtroCpf) params.set("cpf", filtroCpf);
-      if (filtroTipo) params.set("tipo", filtroTipo);
-      if (filtroDe) params.set("de", filtroDe);
-      if (filtroAte) params.set("ate", filtroAte);
 
       const res = await fetch(`/api/audit/admin-logs?${params.toString()}`, {
         headers: { "x-user-email": user?.email || "" },
@@ -85,28 +73,13 @@ export default function AdminAuditoria() {
     } finally {
       setLoading(false);
     }
-  }, [user?.email, page, filtroColaborador, filtroCpf, filtroTipo, filtroDe, filtroAte]);
+  }, [user?.email, page]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
 
-  const handleFilter = () => {
-    setPage(0);
-    fetchLogs();
-  };
-
-  const clearFilters = () => {
-    setFiltroColaborador("");
-    setFiltroCpf("");
-    setFiltroTipo("");
-    setFiltroDe("");
-    setFiltroAte("");
-    setPage(0);
-  };
-
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  const hasFilters = filtroColaborador || filtroCpf || filtroTipo || filtroDe || filtroAte;
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -116,7 +89,6 @@ export default function AdminAuditoria() {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
     });
   };
 
@@ -128,117 +100,119 @@ export default function AdminAuditoria() {
     return cpf;
   };
 
+  const formatCamposAlterados = (campos: unknown): string => {
+    if (!campos) return "";
+    if (typeof campos === "string") return campos;
+    if (typeof campos === "object") {
+      try {
+        const obj = campos as Record<string, unknown>;
+        const parts: string[] = [];
+        for (const [key, val] of Object.entries(obj)) {
+          if (typeof val === "object" && val !== null) {
+            const v = val as Record<string, unknown>;
+            if ("de" in v && "para" in v) {
+              parts.push(`${key}: ${v.de} → ${v.para}`);
+            } else {
+              parts.push(`${key}: ${JSON.stringify(val)}`);
+            }
+          } else {
+            parts.push(`${key}: ${val}`);
+          }
+        }
+        return parts.join("; ");
+      } catch {
+        return JSON.stringify(campos);
+      }
+    }
+    return String(campos);
+  };
+
+  const handleDownloadCSV = async () => {
+    setDownloading(true);
+    try {
+      let allLogs: AuditLog[] = [];
+      let offset = 0;
+      const batchSize = 200;
+      let hasMore = true;
+
+      while (hasMore) {
+        const params = new URLSearchParams();
+        params.set("limit", String(batchSize));
+        params.set("offset", String(offset));
+        const res = await fetch(`/api/audit/admin-logs?${params.toString()}`, {
+          headers: { "x-user-email": user?.email || "" },
+        });
+        if (!res.ok) break;
+        const data = await res.json();
+        allLogs = allLogs.concat(data.logs);
+        offset += batchSize;
+        hasMore = allLogs.length < data.total;
+      }
+
+      const header = "Data/Hora;Colaborador;Ação;CPF;Detalhes;Alterações";
+      const rows = allLogs.map((l) => {
+        const dt = formatDate(l.dataHora);
+        const tipo = TIPO_LABELS[l.tipoAcao] || l.tipoAcao;
+        const cpf = l.cpfConsultado ? formatCpf(l.cpfConsultado) : "";
+        const detalhe = l.termoBuscado
+          ? `Busca: ${l.termoBuscado}`
+          : l.haviacadastro
+          ? l.haviacadastro === "sim"
+            ? "Cliente já existia"
+            : "Cliente novo"
+          : "";
+        const alteracoes = formatCamposAlterados(l.camposAlterados);
+        return [dt, l.colaboradorEmail, tipo, cpf, detalhe, alteracoes]
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(";");
+      });
+
+      const bom = "\uFEFF";
+      const csv = bom + header + "\n" + rows.join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `auditoria_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-full mx-auto space-y-5">
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl md:text-4xl font-display font-bold text-primary mb-2 flex items-center gap-3">
-              <Activity className="w-8 h-8" />
+            <h1 className="text-2xl md:text-3xl font-display font-bold text-primary mb-1 flex items-center gap-3">
+              <Activity className="w-7 h-7" />
               Auditoria de Atividades
             </h1>
-            <p className="text-muted-foreground text-lg">
-              Acompanhe as ações dos colaboradores no sistema.
+            <p className="text-muted-foreground">
+              {total} registro{total !== 1 ? "s" : ""} de atividade{total !== 1 ? "s" : ""}
             </p>
-            {total > 0 && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {total} registro{total !== 1 ? "s" : ""} encontrado{total !== 1 ? "s" : ""}
-              </p>
-            )}
           </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn(
-              "inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all",
-              showFilters
-                ? "bg-primary text-white"
-                : "bg-card border border-border text-foreground hover:bg-muted"
-            )}
-          >
-            <Filter className="w-4 h-4" />
-            Filtros
-            {hasFilters && (
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-            )}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setPage(0); fetchLogs(); }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-muted transition-all"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Atualizar
+            </button>
+            <button
+              onClick={handleDownloadCSV}
+              disabled={downloading || total === 0}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-gradient-to-r from-[#1c3654] to-[#2a5080] text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50"
+            >
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Baixar CSV
+            </button>
+          </div>
         </header>
-
-        {showFilters && (
-          <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/50 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Colaborador (e-mail)</label>
-                <input
-                  type="text"
-                  value={filtroColaborador}
-                  onChange={(e) => setFiltroColaborador(e.target.value)}
-                  placeholder="email@exemplo.com"
-                  className="w-full px-3 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background text-foreground text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">CPF Consultado</label>
-                <input
-                  type="text"
-                  value={filtroCpf}
-                  onChange={(e) => setFiltroCpf(e.target.value)}
-                  placeholder="000.000.000-00"
-                  className="w-full px-3 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background text-foreground text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Tipo de Ação</label>
-                <select
-                  value={filtroTipo}
-                  onChange={(e) => setFiltroTipo(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background text-foreground text-sm"
-                >
-                  <option value="">Todos</option>
-                  <option value="consulta">Consulta</option>
-                  <option value="alteracao">Alteração</option>
-                  <option value="cadastro_novo">Novo Cadastro</option>
-                  <option value="upload_documento">Upload Documento</option>
-                  <option value="pesquisa_cpf">Pesquisa CPF</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Data início</label>
-                <input
-                  type="date"
-                  value={filtroDe}
-                  onChange={(e) => setFiltroDe(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background text-foreground text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Data fim</label>
-                <input
-                  type="date"
-                  value={filtroAte}
-                  onChange={(e) => setFiltroAte(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border-2 border-border focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none bg-background text-foreground text-sm"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleFilter}
-                className="px-6 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm"
-              >
-                Buscar
-              </button>
-              {hasFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="px-6 py-2.5 border border-border text-muted-foreground font-medium rounded-xl hover:bg-muted transition-colors text-sm flex items-center gap-2"
-                >
-                  <X className="w-4 h-4" />
-                  Limpar
-                </button>
-              )}
-            </div>
-          </div>
-        )}
 
         {loading ? (
           <div className="flex justify-center py-12">
@@ -247,150 +221,102 @@ export default function AdminAuditoria() {
         ) : logs.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <Activity className="w-14 h-14 mx-auto mb-4 opacity-20" />
-            <p className="text-lg font-medium">Nenhuma atividade encontrada</p>
+            <p className="text-lg font-medium">Nenhuma atividade registrada ainda</p>
             <p className="text-sm mt-1">
-              {hasFilters
-                ? "Tente alterar os filtros de busca."
-                : "As atividades dos colaboradores aparecerão aqui."}
+              As atividades dos colaboradores aparecerão aqui automaticamente.
             </p>
           </div>
         ) : (
           <>
-            <div className="space-y-2">
-              {logs.map((log) => {
-                const meta = TIPO_ACAO_LABELS[log.tipoAcao] || {
-                  label: log.tipoAcao,
-                  icon: Activity,
-                  color: "text-gray-500 bg-gray-50",
-                };
-                const Icon = meta.icon;
-                const isExpanded = expandedLog === log.id;
-
-                return (
-                  <div
-                    key={log.id}
-                    className="bg-card rounded-xl border border-border/50 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => setExpandedLog(isExpanded ? null : log.id)}
-                  >
-                    <div className="p-4 flex items-center gap-4">
-                      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0", meta.color)}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-foreground text-sm">{meta.label}</span>
-                          {log.cpfConsultado && (
-                            <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground font-mono">
-                              CPF: {formatCpf(log.cpfConsultado)}
-                            </span>
+            <div ref={tableRef} className="bg-card rounded-2xl border border-border/50 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 border-b border-border/50">
+                      <th className="text-left px-4 py-3 font-semibold text-muted-foreground whitespace-nowrap">Data/Hora</th>
+                      <th className="text-left px-4 py-3 font-semibold text-muted-foreground whitespace-nowrap">Colaborador</th>
+                      <th className="text-left px-4 py-3 font-semibold text-muted-foreground whitespace-nowrap">Ação</th>
+                      <th className="text-left px-4 py-3 font-semibold text-muted-foreground whitespace-nowrap">CPF</th>
+                      <th className="text-left px-4 py-3 font-semibold text-muted-foreground whitespace-nowrap">Detalhes</th>
+                      <th className="text-left px-4 py-3 font-semibold text-muted-foreground whitespace-nowrap">Alterações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log, idx) => {
+                      const alteracoes = formatCamposAlterados(log.camposAlterados);
+                      return (
+                        <tr
+                          key={log.id}
+                          className={cn(
+                            "border-b border-border/30 hover:bg-muted/30 transition-colors",
+                            idx % 2 === 0 ? "bg-background" : "bg-muted/10"
                           )}
-                          {log.termoBuscado && (
-                            <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
-                              "{log.termoBuscado}"
-                            </span>
-                          )}
-                          {log.haviacadastro && (
-                            <span className={cn(
-                              "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase",
-                              log.haviacadastro === "sim"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-orange-100 text-orange-700"
-                            )}>
-                              {log.haviacadastro === "sim" ? "Já cadastrado" : "Novo"}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            {log.colaboradorEmail}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
+                        >
+                          <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground font-mono">
                             {formatDate(log.dataHora)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="px-4 pb-4 pt-0 border-t border-border/30 mt-0">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 text-sm">
-                          {log.colaboradorCodigo && (
-                            <div>
-                              <span className="text-muted-foreground text-xs">Código colaborador:</span>
-                              <p className="font-mono">{log.colaboradorCodigo}</p>
-                            </div>
-                          )}
-                          {log.deviceId && (
-                            <div className="flex items-start gap-1.5">
-                              <Smartphone className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
-                              <div>
-                                <span className="text-muted-foreground text-xs">Device ID:</span>
-                                <p className="font-mono text-xs break-all">{log.deviceId}</p>
-                              </div>
-                            </div>
-                          )}
-                          {(log.latitude && log.longitude) && (
-                            <div className="flex items-start gap-1.5">
-                              <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
-                              <div>
-                                <span className="text-muted-foreground text-xs">Localização:</span>
-                                <p className="font-mono text-xs">{log.latitude}, {log.longitude}</p>
-                                <a
-                                  href={`https://www.google.com/maps?q=${log.latitude},${log.longitude}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-xs text-blue-500 hover:underline"
-                                >
-                                  Ver no mapa
-                                </a>
-                              </div>
-                            </div>
-                          )}
-                          {log.camposAlterados && (
-                            <div className="md:col-span-2">
-                              <span className="text-muted-foreground text-xs">Campos alterados:</span>
-                              <pre className="bg-muted rounded-lg p-2 text-xs mt-1 overflow-x-auto">
-                                {JSON.stringify(log.camposAlterados, null, 2)}
-                              </pre>
-                            </div>
-                          )}
-                          {log.syncedAt && (
-                            <div>
-                              <span className="text-muted-foreground text-xs">Sincronizado em:</span>
-                              <p className="text-xs">{formatDate(log.syncedAt)}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-foreground">
+                            {log.colaboradorEmail}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={cn(
+                              "text-[11px] font-bold px-2.5 py-1 rounded-full",
+                              TIPO_COLORS[log.tipoAcao] || "bg-gray-100 text-gray-700"
+                            )}>
+                              {TIPO_LABELS[log.tipoAcao] || log.tipoAcao}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap font-mono text-foreground">
+                            {log.cpfConsultado ? formatCpf(log.cpfConsultado) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground max-w-[200px] truncate">
+                            {log.termoBuscado
+                              ? `Busca: "${log.termoBuscado}"`
+                              : log.haviacadastro
+                              ? log.haviacadastro === "sim"
+                                ? "Cliente já existia"
+                                : "Cliente novo"
+                              : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground max-w-[300px]">
+                            {alteracoes ? (
+                              <span className="text-xs break-words whitespace-pre-wrap">{alteracoes}</span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-3 pt-4">
-                <button
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                  className="p-2 rounded-lg border border-border hover:bg-muted disabled:opacity-30 transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <span className="text-sm text-muted-foreground">
-                  Página {page + 1} de {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="p-2 rounded-lg border border-border hover:bg-muted disabled:opacity-30 transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} de {total}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="p-2 rounded-lg border border-border hover:bg-muted disabled:opacity-30 transition-colors"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    {page + 1} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={page >= totalPages - 1}
+                    className="p-2 rounded-lg border border-border hover:bg-muted disabled:opacity-30 transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             )}
           </>

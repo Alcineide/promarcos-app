@@ -5,3 +5,4 @@ export * from "./provas";
 export * from "./documentos-assinatura";
 export * from "./audit-log";
 export * from "./usuarios";
+export * from "./device-sessions";
