@@ -1,35 +1,10 @@
 import { Router, type IRouter } from "express";
 import { db, deviceSessionsTable, usuariosTable } from "@workspace/db";
-import { eq, and, desc, ne } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 const MAX_DEVICES = 2;
-const SUPER_ADMIN_EMAIL = "marcosaurelio_adv@outlook.com";
 
 const router: IRouter = Router();
-
-router.post("/auth/reset-all", async (req, res) => {
-  try {
-    const { confirmacao, email } = req.body as { confirmacao?: string; email?: string };
-    if (confirmacao !== "ZERAR_TUDO" || email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-      res.status(403).json({ error: "Não autorizado" });
-      return;
-    }
-
-    const deletedDevices = await db.delete(deviceSessionsTable).returning();
-    const deletedUsers = await db.delete(usuariosTable).where(
-      ne(usuariosTable.email, SUPER_ADMIN_EMAIL)
-    ).returning();
-
-    res.json({
-      success: true,
-      dispositivosRemovidos: deletedDevices.length,
-      usuariosRemovidos: deletedUsers.length,
-    });
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ error: "Erro interno" });
-  }
-});
 
 router.post("/auth/check-device", async (req, res) => {
   try {
