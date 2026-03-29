@@ -6,6 +6,7 @@ import { Layout } from "@/components/layout";
 import { motion } from "framer-motion";
 import { formatCPF } from "@/lib/utils";
 import { buscarPorCpf, type PromarkosPessoa } from "@/lib/promarcos-api";
+import { registrarAuditoria } from "@/lib/audit-service";
 import { cn } from "@/lib/utils";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { cacheSearchResults, getCachedSearchResults } from "@/lib/offline-db";
@@ -53,7 +54,14 @@ export default function Home() {
       setPromarkosLoading(true);
       try {
         const result = await buscarPorCpf(digits);
-        setPromarkosResult(result.existe && result.pessoas.length > 0 ? { existe: true, pessoa: result.pessoas[0] } : { existe: false });
+        const encontrado = result.existe && result.pessoas.length > 0;
+        setPromarkosResult(encontrado ? { existe: true, pessoa: result.pessoas[0] } : { existe: false });
+        registrarAuditoria({
+          tipo_acao: "pesquisa_cpf",
+          cpf_consultado: digits,
+          havia_cadastro: encontrado ? "sim" : "nao",
+          termo_buscado: encontrado ? result.pessoas[0]?.razao_social : undefined,
+        });
       } catch {
         setPromarkosResult(null);
       } finally {

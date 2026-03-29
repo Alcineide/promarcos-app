@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout";
 import { useState, useCallback } from "react";
 import { PDFDocument } from "pdf-lib";
 import { useOnlineStatus } from "@/hooks/use-online-status";
+import { registrarAuditoria } from "@/lib/audit-service";
 
 interface PesquisaResult {
   local: string;
@@ -66,6 +67,12 @@ export default function PesquisaCpf() {
     setPesquisaFeita(false);
     setErro("");
     setResultados([]);
+
+    registrarAuditoria({
+      tipo_acao: "pesquisa_cpf",
+      cpf_consultado: cpfNumerico,
+      termo_buscado: "Litispendência - " + CONSULTAS.map(c => c.label).join(", "),
+    });
 
     for (const consulta of CONSULTAS) {
       setFonteAtual(consulta.label);

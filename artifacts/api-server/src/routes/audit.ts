@@ -16,6 +16,52 @@ function safeInt(v: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
+router.post("/audit/log", async (req, res) => {
+  try {
+    const userEmail = req.headers["x-user-email"] as string | undefined;
+    if (!userEmail) {
+      res.status(401).json({ error: "Não autenticado" });
+      return;
+    }
+
+    const { tipo_acao, cpf_consultado, havia_cadastro, campos_alterados, termo_buscado, latitude, longitude, device_id } = req.body as {
+      tipo_acao: string;
+      cpf_consultado?: string;
+      havia_cadastro?: string;
+      campos_alterados?: unknown;
+      termo_buscado?: string;
+      latitude?: string;
+      longitude?: string;
+      device_id?: string;
+    };
+
+    if (!tipo_acao || !isValidTipoAcao(tipo_acao)) {
+      res.status(400).json({ error: "Tipo de ação inválido" });
+      return;
+    }
+
+    await db.insert(auditLogTable).values({
+      colaboradorEmail: userEmail.toLowerCase(),
+      cpfConsultado: cpf_consultado ?? null,
+      tipoAcao: tipo_acao as TipoAcao,
+      haviacadastro: havia_cadastro ?? null,
+      camposAlterados: campos_alterados ?? null,
+      termoBuscado: termo_buscado ?? null,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      dataHora: new Date(),
+      deviceId: device_id ?? null,
+      syncStatus: "synced",
+      syncedAt: new Date(),
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Erro ao registrar auditoria" });
+  }
+});
+
 router.post("/audit/sync", async (req, res) => {
   const syncKey = req.headers["x-audit-sync-key"] as string | undefined;
   if (!process.env.AUDIT_SYNC_KEY || syncKey !== process.env.AUDIT_SYNC_KEY) {

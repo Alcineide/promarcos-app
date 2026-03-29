@@ -17,6 +17,7 @@ import { Layout } from "@/components/layout";
 import { FormInput } from "@/components/form-input";
 import { DocumentScanner } from "@/components/DocumentScanner";
 import { cn, formatCEP, formatCPF, formatPhone, formatDate } from "@/lib/utils";
+import { registrarAuditoria } from "@/lib/audit-service";
 import { useToast } from "@/hooks/use-toast";
 import { 
   useGetCliente, 
@@ -155,6 +156,17 @@ export default function ClientForm() {
     resolver: zodResolver(clientSchema),
     defaultValues: { escritorio: "Mendes Advocacia - Matriz" }
   });
+
+  const auditedRef = useRef(false);
+  useEffect(() => {
+    if (clientData && isEditing && !auditedRef.current) {
+      auditedRef.current = true;
+      registrarAuditoria({
+        tipo_acao: "consulta",
+        cpf_consultado: clientData.cpf,
+      });
+    }
+  }, [clientData, isEditing]);
 
   useEffect(() => {
     if (clientData) {
@@ -312,9 +324,11 @@ export default function ClientForm() {
         if (currentCpf !== cpfNums) return;
         if (result.existe && result.pessoas.length > 0) {
           fillFormFromPromarcos(result.pessoas[0], cpfNums);
+          registrarAuditoria({ tipo_acao: "pesquisa_cpf", cpf_consultado: cpfNums, havia_cadastro: "sim", termo_buscado: result.pessoas[0]?.razao_social });
         } else {
           setCpfCheckResult({ existe: false });
           setPromarcosCodigo(null);
+          registrarAuditoria({ tipo_acao: "pesquisa_cpf", cpf_consultado: cpfNums, havia_cadastro: "nao" });
         }
       } catch {
         if (requestId === cpfRequestIdRef.current) {
@@ -426,10 +440,29 @@ export default function ClientForm() {
 
       const dataWithPromarcos = { ...data, promarcosCodigo: promarcosCodigo ?? undefined };
       if (isEditing) {
+        const oldData = clientData as Record<string, unknown>;
+        const changedFields: Record<string, { old: unknown; new: unknown }> = {};
+        for (const key of Object.keys(data)) {
+          const oldVal = oldData?.[key];
+          const newVal = (data as Record<string, unknown>)[key];
+          if (oldVal !== newVal && String(oldVal || "") !== String(newVal || "")) {
+            changedFields[key] = { old: oldVal, new: newVal };
+          }
+        }
         await updateClient.mutateAsync({ id: clientId, data: dataWithPromarcos });
+        registrarAuditoria({
+          tipo_acao: "alteracao",
+          cpf_consultado: data.cpf,
+          campos_alterados: Object.keys(changedFields).length > 0 ? changedFields : undefined,
+        });
         toast({ title: "Sucesso", description: "Cliente atualizado com sucesso!" });
       } else {
         const newClient = await createClient.mutateAsync({ data: dataWithPromarcos });
+        registrarAuditoria({
+          tipo_acao: "cadastro_novo",
+          cpf_consultado: data.cpf,
+          havia_cadastro: "nao",
+        });
         toast({ title: "Sucesso", description: promarcosResult.sucesso ? "Cliente salvo no Promarcos e no sistema!" : "Cliente salvo no sistema (Promarcos: verifique)." });
         setLocation(`/cliente/${newClient.id}`);
       }
@@ -996,6 +1029,11 @@ export default function ClientForm() {
       }
       setScannerModal(null);
       if (failCount === 0) {
+        registrarAuditoria({
+          tipo_acao: "upload_documento",
+          cpf_consultado: watch("cpf"),
+          termo_buscado: `${tipo} - ${successCount} arquivo(s)`,
+        });
         toast({ title: "Upload concluído!", description: `${successCount} arquivo(s) de "${tipo}" enviado(s) ao Promarcos com sucesso.` });
       } else if (successCount > 0) {
         toast({ title: "Parcialmente concluído", description: `${successCount} enviado(s), ${failCount} falhou.`, variant: "destructive" });
@@ -1098,14 +1136,23 @@ export default function ClientForm() {
             </div>
           </div>
           
-          <button 
-            onClick={handleSubmit(onSubmit)}
-            disabled={createClient.isPending || updateClient.isPending}
-            className="hidden md:flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
-          >
-            <Save className="w-5 h-5" />
-            Salvar Cliente
-          </button>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/novo"
+              className="hidden md:flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold border-2 border-primary/30 text-primary hover:bg-primary/5 transition-all duration-200"
+            >
+              <FilePlus2 className="w-5 h-5" />
+              Novo
+            </Link>
+            <button 
+              onClick={handleSubmit(onSubmit)}
+              disabled={createClient.isPending || updateClient.isPending}
+              className="hidden md:flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+            >
+              <Save className="w-5 h-5" />
+              Salvar Cliente
+            </button>
+          </div>
         </header>
 
         {/* Tabs */}
