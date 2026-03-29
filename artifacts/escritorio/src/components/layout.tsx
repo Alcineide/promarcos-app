@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt, FileSearch, Download, Power, ShieldCheck } from "lucide-react";
+import { Users, Search, Menu, X, CalendarCheck, LogIn, LogOut, Receipt, FileSearch, Download, Power, ShieldCheck, Activity } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -160,32 +160,61 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <p className="px-3 mb-2 text-[10px] font-bold tracking-[0.15em] uppercase text-red-400/70">
               Administração
             </p>
-            <Link
-              href="/admin/usuarios"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group",
-                location === "/admin/usuarios"
-                  ? "bg-red-500/15 text-red-300 shadow-sm shadow-red-500/10"
-                  : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
-              )}
-            >
-              <ShieldCheck className={cn("h-[18px] w-[18px]", location === "/admin/usuarios" ? "text-red-400" : "text-white/30 group-hover:text-red-400/70")} />
-              Gerenciar Usuários
-            </Link>
+            <div className="space-y-0.5">
+              <Link
+                href="/admin/usuarios"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group",
+                  location === "/admin/usuarios"
+                    ? "bg-red-500/15 text-red-300 shadow-sm shadow-red-500/10"
+                    : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
+                )}
+              >
+                <ShieldCheck className={cn("h-[18px] w-[18px]", location === "/admin/usuarios" ? "text-red-400" : "text-white/30 group-hover:text-red-400/70")} />
+                Gerenciar Usuários
+              </Link>
+              <Link
+                href="/admin/auditoria"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group",
+                  location === "/admin/auditoria"
+                    ? "bg-red-500/15 text-red-300 shadow-sm shadow-red-500/10"
+                    : "text-white/60 hover:bg-white/[0.04] hover:text-white/90"
+                )}
+              >
+                <Activity className={cn("h-[18px] w-[18px]", location === "/admin/auditoria" ? "text-red-400" : "text-white/30 group-hover:text-red-400/70")} />
+                Auditoria
+              </Link>
+              <button
+                onClick={async () => {
+                  setIsMobileMenuOpen(false);
+                  try {
+                    const res = await fetch(`${import.meta.env.BASE_URL}api/download-projeto`, {
+                      headers: { "x-user-email": user?.email || "" },
+                    });
+                    if (!res.ok) return;
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "mendes-advocacia-projeto-completo.json";
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch {}
+                }}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group text-white/60 hover:bg-white/[0.04] hover:text-white/90 w-full text-left"
+              >
+                <Download className="h-[18px] w-[18px] text-white/30 group-hover:text-red-400/70" />
+                Baixar Projeto
+              </button>
+            </div>
           </div>
         )}
 
         <div className="p-3 space-y-2">
           <div className="mx-1 border-t border-white/[0.06] mb-2" />
-          <a
-            href={`${import.meta.env.BASE_URL}api/download-projeto`}
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 group text-white/50 hover:bg-white/[0.04] hover:text-white/80"
-          >
-            <Download className="h-[18px] w-[18px] text-white/25 group-hover:text-white/50" />
-            Baixar Projeto
-          </a>
           <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-white/[0.03]">
             <div className="w-8 h-8 rounded-lg bg-[#4a7aab]/30 flex items-center justify-center text-white/80 font-bold text-xs">
               {user?.nome?.charAt(0)?.toUpperCase() || "U"}

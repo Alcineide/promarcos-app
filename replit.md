@@ -18,6 +18,8 @@ Sistema complementar de cadastro de clientes para o escritório Mendes Advocacia
 - **Anexos** de documentos
 - **Auditoria invisível**: sistema silencioso que registra ações dos colaboradores (buscas, uploads) com geolocalização e suporte offline via SQLite local, sincronização automática com PostgreSQL
 - **Admin / Gerenciamento de Usuários**: sistema de roles (`admin`/`user`) com super admin (`marcosaurelio_adv@outlook.com`); tabela `usuarios` no PostgreSQL; `/api/usuarios` CRUD com guards de autorização (`x-user-email` header); página `/admin/usuarios` visível apenas para admins; toggle role, ativar/desativar, remover usuários; super admin auto-seeded no startup
+- **Admin / Auditoria de Atividades**: página `/admin/auditoria` com listagem paginada dos logs de auditoria; filtros por colaborador, CPF, tipo de ação, período; detalhes expandíveis com localização (link Google Maps), device ID, campos alterados; endpoint `/api/audit/admin-logs` protegido por role admin
+- **Admin / Baixar Projeto**: link de download do projeto restrito apenas a administradores (endpoint `/api/download-projeto` protegido server-side); exclui arquivos `.env` do export
 - **Modo Offline (Scanner Mobile)**: AsyncStorage-backed persistent scan queue with upload status tracking (pending/syncing/synced/failed); `NetworkProvider` context with `useNetworkStatus` hook via `@react-native-community/netinfo`; client search cache for offline browsing; background upload sync service with auto-retry on connectivity restore; `OfflineBanner` component on home/client screens; "Fila de Envio" tab in galeria with retry/remove per doc; queue badge on gallery icon
 
 ---

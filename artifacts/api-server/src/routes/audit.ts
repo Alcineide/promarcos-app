@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, auditLogTable, tipoAcaoValues } from "@workspace/db";
+import { db, auditLogTable, tipoAcaoValues, usuariosTable } from "@workspace/db";
 import type { TipoAcao } from "@workspace/db";
-import { eq, and, gte, lte, ilike } from "drizzle-orm";
+import { eq, and, gte, lte, ilike, desc, sql } from "drizzle-orm";
 
 const AUDIT_ADMIN_KEY = process.env.AUDIT_ADMIN_KEY || "";
 
@@ -146,6 +146,102 @@ router.get("/audit/logs", async (req, res) => {
         syncedAt: l.syncedAt?.toISOString() ?? null,
       }))
     );
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Erro ao consultar logs de auditoria" });
+  }
+});
+
+router.get("/audit/admin-logs", async (req, res) => {
+  try {
+    const requesterEmail = req.headers["x-user-email"] as string;
+    if (!requesterEmail) {
+      res.status(401).json({ error: "Não autenticado" });
+      return;
+    }
+    const [requester] = await db
+      .select()
+      .from(usuariosTable)
+      .where(eq(usuariosTable.email, requesterEmail.toLowerCase()));
+    if (!requester || requester.role !== "admin" || !requester.ativo) {
+      res.status(403).json({ error: "Acesso negado" });
+      return;
+    }
+
+    const {
+      colaborador,
+      cpf,
+      tipo,
+      de,
+      ate,
+      limit: limitStr,
+      offset: offsetStr,
+    } = req.query as Record<string, string | undefined>;
+
+    const conditions = [];
+
+    if (colaborador) {
+      conditions.push(ilike(auditLogTable.colaboradorEmail, `%${colaborador}%`));
+    }
+    if (cpf) {
+      conditions.push(ilike(auditLogTable.cpfConsultado, `%${cpf}%`));
+    }
+    if (tipo && isValidTipoAcao(tipo)) {
+      conditions.push(eq(auditLogTable.tipoAcao, tipo));
+    }
+    if (de) {
+      const deDate = new Date(de);
+      if (!isNaN(deDate.getTime())) {
+        conditions.push(gte(auditLogTable.dataHora, deDate));
+      }
+    }
+    if (ate) {
+      const ateDate = new Date(ate);
+      if (!isNaN(ateDate.getTime())) {
+        ateDate.setHours(23, 59, 59, 999);
+        conditions.push(lte(auditLogTable.dataHora, ateDate));
+      }
+    }
+
+    const limit = Math.min(safeInt(limitStr, 50), 200);
+    const offset = safeInt(offsetStr, 0);
+
+    let query = db
+      .select()
+      .from(auditLogTable)
+      .orderBy(desc(auditLogTable.dataHora))
+      .limit(limit)
+      .offset(offset);
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+
+    const logs = await query;
+
+    const countQuery = conditions.length > 0
+      ? db.select({ count: sql<number>`count(*)` }).from(auditLogTable).where(and(...conditions))
+      : db.select({ count: sql<number>`count(*)` }).from(auditLogTable);
+    const [{ count }] = await countQuery;
+
+    res.json({
+      logs: logs.map((l) => ({
+        id: l.id,
+        colaboradorEmail: l.colaboradorEmail,
+        colaboradorCodigo: l.colaboradorCodigo,
+        cpfConsultado: l.cpfConsultado,
+        tipoAcao: l.tipoAcao,
+        haviacadastro: l.haviacadastro,
+        camposAlterados: l.camposAlterados,
+        termoBuscado: l.termoBuscado,
+        latitude: l.latitude,
+        longitude: l.longitude,
+        dataHora: l.dataHora.toISOString(),
+        deviceId: l.deviceId,
+        syncedAt: l.syncedAt?.toISOString() ?? null,
+      })),
+      total: Number(count),
+    });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Erro ao consultar logs de auditoria" });

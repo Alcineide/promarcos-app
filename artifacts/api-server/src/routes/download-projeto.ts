@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { readFileSync, readdirSync, statSync, existsSync } from "fs";
 import { join, relative } from "path";
+import { db, usuariosTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -11,12 +13,12 @@ const SKIP_DIRS = new Set([
 
 const SKIP_FILES = new Set([
   ".replit", "replit.nix", "generated-icon.png", ".gitignore",
-  "pnpm-lock.yaml",
+  "pnpm-lock.yaml", ".env",
 ]);
 
 const TEXT_EXTENSIONS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".json", ".css", ".html", ".md",
-  ".mjs", ".cjs", ".yaml", ".yml", ".toml", ".env", ".svg",
+  ".mjs", ".cjs", ".yaml", ".yml", ".toml", ".svg",
   ".sh", ".txt", ".prettierrc", ".eslintrc",
 ]);
 
@@ -62,7 +64,25 @@ function collectFiles(dir: string, rootDir: string): { path: string; content: st
   return results;
 }
 
-router.get("/download-projeto", (_req, res) => {
+router.get("/download-projeto", async (req, res) => {
+  try {
+    const requesterEmail = req.headers["x-user-email"] as string;
+    if (!requesterEmail) {
+      res.status(401).json({ error: "Não autenticado" });
+      return;
+    }
+    const [requester] = await db
+      .select()
+      .from(usuariosTable)
+      .where(eq(usuariosTable.email, requesterEmail.toLowerCase()));
+    if (!requester || requester.role !== "admin" || !requester.ativo) {
+      res.status(403).json({ error: "Acesso negado" });
+      return;
+    }
+  } catch {
+    res.status(500).json({ error: "Erro interno" });
+    return;
+  }
   const projectRoot = join(process.cwd(), "../..");
   const files = collectFiles(projectRoot, projectRoot);
 

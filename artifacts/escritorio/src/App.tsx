@@ -8,6 +8,7 @@ import ClientForm from "./pages/client-form";
 import Veiculos from "./pages/veiculos";
 import PesquisaCpf from "./pages/pesquisa-cpf";
 import AdminUsuarios from "./pages/admin-usuarios";
+import AdminAuditoria from "./pages/admin-auditoria";
 import LoginPage from "./pages/login";
 import { Redirect } from "wouter";
 import { AuthProvider, useAuth } from "./lib/auth-context";
@@ -48,6 +49,7 @@ function ProtectedRoutes() {
       <Route path="/veiculos" component={Veiculos} />
       <Route path="/pesquisa-cpf" component={PesquisaCpf} />
       {isAdmin && <Route path="/admin/usuarios" component={AdminUsuarios} />}
+      {isAdmin && <Route path="/admin/auditoria" component={AdminAuditoria} />}
       <Route component={NotFound} />
     </Switch>
   );
