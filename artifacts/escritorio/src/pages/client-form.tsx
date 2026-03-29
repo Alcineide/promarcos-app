@@ -161,14 +161,14 @@ export default function ClientForm() {
       reset(clientData as ClientFormData);
       if ((clientData as any).promarcosCodigo) {
         setPromarcosCodigo((clientData as any).promarcosCodigo);
-      } else if (clientData.cpf) {
+      } else if (clientData.cpf && navigator.onLine) {
         const cpfNums = clientData.cpf.replace(/\D/g, "");
         if (cpfNums.length === 11) {
           buscarPorCpf(cpfNums).then(result => {
             if (result.existe && result.pessoas.length > 0) {
               setPromarcosCodigo(result.pessoas[0].codigo);
             }
-          });
+          }).catch(() => {});
         }
       }
     }
@@ -265,9 +265,12 @@ export default function ClientForm() {
     setPromarkosPreloaded(true);
   };
 
-  // --- Auto-load from URL ?cpf= param ---
   useEffect(() => {
     if (!cpfFromUrl || isEditing) return;
+    if (!navigator.onLine) {
+      setValue("cpf", formatCPF(cpfFromUrl));
+      return;
+    }
     const load = async () => {
       setCpfChecking(true);
       try {
@@ -298,6 +301,7 @@ export default function ClientForm() {
       setCpfCheckResult(null);
       return;
     }
+    if (!navigator.onLine) return;
     const requestId = ++cpfRequestIdRef.current;
     cpfTimerRef.current = setTimeout(async () => {
       setCpfChecking(true);

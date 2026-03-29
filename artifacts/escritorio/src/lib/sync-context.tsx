@@ -63,11 +63,21 @@ export function SyncQueueProvider({ children }: { children: ReactNode }) {
   const syncNow = useCallback(async () => {
     if (isSyncing || !navigator.onLine) return;
     setIsSyncing(true);
+    let succeeded = 0;
+    let failed = 0;
     try {
       const pending = await getPendingSubmissions();
       const toSync = pending.filter((s) => s.status === "pending" || s.status === "failed");
       for (const sub of toSync) {
-        await syncOne(sub);
+        const ok = await syncOne(sub);
+        if (ok) succeeded++;
+        else failed++;
+      }
+      if (succeeded > 0 || failed > 0) {
+        const event = new CustomEvent("sync-result", {
+          detail: { succeeded, failed },
+        });
+        window.dispatchEvent(event);
       }
     } finally {
       setIsSyncing(false);

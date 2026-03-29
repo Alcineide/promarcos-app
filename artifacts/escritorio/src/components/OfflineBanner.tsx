@@ -1,11 +1,43 @@
+import { useEffect } from "react";
 import { WifiOff, CloudOff, RefreshCw } from "lucide-react";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { useSyncQueue } from "@/lib/sync-context";
+import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function OfflineBanner() {
   const isOnline = useOnlineStatus();
   const { pendingCount, isSyncing } = useSyncQueue();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { succeeded, failed } = (e as CustomEvent).detail as {
+        succeeded: number;
+        failed: number;
+      };
+      if (succeeded > 0 && failed === 0) {
+        toast({
+          title: "Sincronização concluída",
+          description: `${succeeded} cadastro(s) enviado(s) com sucesso.`,
+        });
+      } else if (succeeded > 0 && failed > 0) {
+        toast({
+          title: "Sincronização parcial",
+          description: `${succeeded} enviado(s), ${failed} falhou(aram). Verifique a fila.`,
+          variant: "destructive",
+        });
+      } else if (failed > 0) {
+        toast({
+          title: "Falha na sincronização",
+          description: `${failed} cadastro(s) não puderam ser enviados. Serão tentados novamente.`,
+          variant: "destructive",
+        });
+      }
+    };
+    window.addEventListener("sync-result", handler);
+    return () => window.removeEventListener("sync-result", handler);
+  }, [toast]);
 
   return (
     <AnimatePresence>
