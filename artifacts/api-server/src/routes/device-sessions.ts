@@ -167,4 +167,115 @@ router.delete("/auth/devices/:id", async (req, res) => {
   }
 });
 
+router.post("/auth/verify", async (req, res) => {
+  try {
+    const { email, deviceId, deviceName, sistema } = req.body as {
+      email: string;
+      deviceId: string;
+      deviceName?: string;
+      sistema?: string;
+    };
+
+    if (!email || !deviceId) {
+      res.status(400).json({ authorized: false, error: "Email e deviceId são obrigatórios" });
+      return;
+    }
+
+    const emailLower = email.toLowerCase();
+
+    const [usuario] = await db
+      .select()
+      .from(usuariosTable)
+      .where(eq(usuariosTable.email, emailLower));
+
+    if (!usuario) {
+      res.status(403).json({
+        authorized: false,
+        error: "Usuário não autorizado. Solicite acesso ao administrador.",
+      });
+      return;
+    }
+
+    if (!usuario.ativo) {
+      res.status(403).json({
+        authorized: false,
+        error: "Sua conta está desativada. Contate o administrador.",
+      });
+      return;
+    }
+
+    const [existingDevice] = await db
+      .select()
+      .from(deviceSessionsTable)
+      .where(
+        and(
+          eq(deviceSessionsTable.userEmail, emailLower),
+          eq(deviceSessionsTable.deviceId, deviceId),
+          eq(deviceSessionsTable.ativo, true)
+        )
+      );
+
+    if (existingDevice) {
+      await db
+        .update(deviceSessionsTable)
+        .set({
+          lastSeenAt: new Date(),
+          deviceName: deviceName || existingDevice.deviceName,
+        })
+        .where(eq(deviceSessionsTable.id, existingDevice.id));
+
+      res.json({
+        authorized: true,
+        nome: usuario.nome,
+        email: usuario.email,
+        role: usuario.role,
+      });
+      return;
+    }
+
+    const activeSessions = await db
+      .select()
+      .from(deviceSessionsTable)
+      .where(
+        and(
+          eq(deviceSessionsTable.userEmail, emailLower),
+          eq(deviceSessionsTable.ativo, true)
+        )
+      )
+      .orderBy(desc(deviceSessionsTable.lastSeenAt));
+
+    if (activeSessions.length >= MAX_DEVICES) {
+      res.status(403).json({
+        authorized: false,
+        error: `Limite de ${MAX_DEVICES} dispositivos atingido. Desautorize um dispositivo antes de usar outro.`,
+        activeDevices: activeSessions.map((s) => ({
+          id: s.id,
+          deviceName: s.deviceName || "Dispositivo desconhecido",
+          lastSeenAt: s.lastSeenAt.toISOString(),
+        })),
+      });
+      return;
+    }
+
+    await db
+      .insert(deviceSessionsTable)
+      .values({
+        userEmail: emailLower,
+        deviceId,
+        deviceName: (deviceName ? `${deviceName}${sistema ? ` (${sistema})` : ""}` : null),
+        lastSeenAt: new Date(),
+      });
+
+    res.json({
+      authorized: true,
+      nome: usuario.nome,
+      email: usuario.email,
+      role: usuario.role,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ authorized: false, error: "Erro interno" });
+  }
+});
+
 export default router;

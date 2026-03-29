@@ -62,23 +62,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { role: "user", isSuperAdmin: false };
   };
 
-  const checkDevice = async (email: string): Promise<{ allowed: boolean; message?: string }> => {
+  const verifyAuth = async (email: string): Promise<{ allowed: boolean; message?: string; nome?: string; role?: string }> => {
     try {
       const deviceId = getOrCreateDeviceId();
       const deviceName = getDeviceName();
-      const res = await fetch("/api/auth/check-device", {
+      const res = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, deviceId, deviceName }),
+        body: JSON.stringify({ email, deviceId, deviceName, sistema: "Promarcos Clientes" }),
       });
       const data = await res.json();
-      if (!res.ok || !data.allowed) {
+      if (!res.ok || !data.authorized) {
         return {
           allowed: false,
-          message: data.error || "Limite de dispositivos atingido.",
+          message: data.error || "Acesso não autorizado.",
         };
       }
-      return { allowed: true };
+      return { allowed: true, nome: data.nome, role: data.role };
     } catch {
       return { allowed: true };
     }
@@ -93,8 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const roleInfo = await fetchRole(parsed.email);
           const fullUser = { ...parsed, ...roleInfo };
 
-          const deviceCheck = await checkDevice(parsed.email);
-          if (!deviceCheck.allowed) {
+          const authCheck = await verifyAuth(parsed.email);
+          if (!authCheck.allowed) {
             sessionStorage.removeItem(SESSION_KEY);
             setIsLoading(false);
             return;
@@ -126,9 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: data.mensagem as string };
       }
 
-      const deviceCheck = await checkDevice(email);
-      if (!deviceCheck.allowed) {
-        return { success: false, message: deviceCheck.message };
+      const authCheck = await verifyAuth(email);
+      if (!authCheck.allowed) {
+        return { success: false, message: authCheck.message };
       }
 
       const roleInfo = await fetchRole(email);
