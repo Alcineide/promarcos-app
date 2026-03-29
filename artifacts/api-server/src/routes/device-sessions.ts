@@ -290,7 +290,7 @@ router.post("/auth/verify", async (req, res) => {
       )
       .orderBy(desc(deviceSessionsTable.lastSeenAt));
 
-    if (activeSessions.length >= MAX_DEVICES) {
+    if (!usuario.isSuperAdmin && activeSessions.length >= MAX_DEVICES) {
       res.status(403).json({
         authorized: false,
         error: `Limite de ${MAX_DEVICES} dispositivos atingido. Desautorize um dispositivo antes de usar outro.`,
