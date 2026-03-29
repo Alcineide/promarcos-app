@@ -14,6 +14,7 @@ interface PesquisaResult {
 
 const CONSULTAS = [
   { key: "pje_trf1", label: "PJE-TRF1", url: "https://pje1g-consultapublica.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam", descricao: "PJe TRF1 - Processos Eletrônicos (Novo)" },
+  { key: "pje_tjma", label: "PJE-TJMA", url: "https://pje.tjma.jus.br/pje/ConsultaPublica/listView.seam", descricao: "PJe TJMA - Tribunal de Justiça do Maranhão" },
   { key: "trf1_secao_to", label: "TRF1-SEÇÃO-TO", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO", descricao: "TRF1 Seção Judiciária TO - Processos Físicos (Antigo)" },
   { key: "trf1_araguaina", label: "TRF1-ARAGUAÍNA", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=ARAGUAINA", descricao: "TRF1 Subseção Araguaína - Processos Físicos (Antigo)" },
   { key: "trf1_balsas", label: "TRF1-BALSAS", url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=MA&subsecao=BALSAS", descricao: "TRF1 Subseção Balsas - Processos Físicos (Antigo)" },

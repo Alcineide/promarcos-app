@@ -66,7 +66,7 @@ const CHROMIUM_ARGS = [
 
 interface SiteConfig {
   url: string;
-  automacao?: "pje_trf1" | "trf1_processual";
+  automacao?: "pje_trf1" | "trf1_processual" | "pje_tjma";
 }
 
 interface DadosPesquisa {
@@ -79,8 +79,11 @@ interface DadosPesquisa {
 
 const PJE_TRF1_URL = "https://pje1g-consultapublica.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam";
 
+const PJE_TJMA_URL = "https://pje.tjma.jus.br/pje/ConsultaPublica/listView.seam";
+
 const SITE_CONFIGS: Record<string, SiteConfig> = {
   pje_trf1: { url: PJE_TRF1_URL, automacao: "pje_trf1" },
+  pje_tjma: { url: PJE_TJMA_URL, automacao: "pje_tjma" },
   trf1_secao_to: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO", automacao: "trf1_processual" },
   trf1_araguaina: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=TO&subsecao=ARAGUAINA", automacao: "trf1_processual" },
   trf1_balsas: { url: "https://processual.trf1.jus.br/consultaProcessual/cpfCnpjParte.php?secao=MA&subsecao=BALSAS", automacao: "trf1_processual" },
@@ -290,7 +293,7 @@ async function capturarPagina(siteKey: string, cpf: string, dados?: DadosPesquis
 
     await new Promise(r => setTimeout(r, 3000));
 
-    if (config.automacao === "pje_trf1") {
+    if (config.automacao === "pje_trf1" || config.automacao === "pje_tjma") {
       await automacaoPjeTrf1(page, cpf);
     } else if (config.automacao === "trf1_processual") {
       await automacaoTrf1Processual(page, cpf);
@@ -301,7 +304,7 @@ async function capturarPagina(siteKey: string, cpf: string, dados?: DadosPesquis
       margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
     };
 
-    if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
+    if (config.automacao === "pje_trf1" || config.automacao === "pje_tjma" || config.automacao === "trf1_processual") {
       const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
       pdfOptions.width = "1280px";
       pdfOptions.height = `${Math.max(bodyHeight + 40, 900)}px`;
@@ -351,7 +354,7 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
 
       await new Promise(r => setTimeout(r, 3000));
 
-      if (config.automacao === "pje_trf1") {
+      if (config.automacao === "pje_trf1" || config.automacao === "pje_tjma") {
         await automacaoPjeTrf1(page, cpf);
       } else if (config.automacao === "trf1_processual") {
         await automacaoTrf1Processual(page, cpf);
@@ -360,7 +363,7 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
       const pageText = await page.evaluate(() => document.body?.innerText || "");
 
       let semResultado: boolean;
-      if (config.automacao === "pje_trf1") {
+      if (config.automacao === "pje_trf1" || config.automacao === "pje_tjma") {
         const matchResultados = pageText.match(/(\d+)\s*resultados?\s*encontrados?/i);
         if (matchResultados) {
           semResultado = parseInt(matchResultados[1], 10) === 0;
@@ -386,7 +389,7 @@ router.post("/pesquisa/consultar-site", async (req, res) => {
         footerTemplate: `<div style="font-size:9px;font-family:Arial,sans-serif;color:#555;width:100%;padding:0 15mm;display:flex;justify-content:space-between;"><span>${pageUrl}</span><span><span class="pageNumber"></span>/<span class="totalPages"></span></span></div>`,
       };
 
-      if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
+      if (config.automacao === "pje_trf1" || config.automacao === "pje_tjma" || config.automacao === "trf1_processual") {
         const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
         consultaPdfOptions.width = "1280px";
         consultaPdfOptions.height = `${Math.max(bodyHeight + 40, 900)}px`;
@@ -479,7 +482,7 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
           });
           await new Promise(r => setTimeout(r, 2000));
 
-          if (config.automacao === "pje_trf1") {
+          if (config.automacao === "pje_trf1" || config.automacao === "pje_tjma") {
             await automacaoPjeTrf1(page, cpf);
           } else if (config.automacao === "trf1_processual") {
             await automacaoTrf1Processual(page, cpf);
@@ -495,7 +498,7 @@ router.post("/pesquisa/capturar-todas", async (req, res) => {
             footerTemplate: '<div style="font-size:8px;text-align:center;width:100%;color:#999;">Promarcos - Mendes Advocacia | Página <span class="pageNumber"></span></div>',
           };
 
-          if (config.automacao === "pje_trf1" || config.automacao === "trf1_processual") {
+          if (config.automacao === "pje_trf1" || config.automacao === "pje_tjma" || config.automacao === "trf1_processual") {
             const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
             todasPdfOpts.width = "1280px";
             todasPdfOpts.height = `${Math.max(bodyHeight + 40, 900)}px`;
