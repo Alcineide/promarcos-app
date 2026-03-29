@@ -69,9 +69,9 @@ export default function PesquisaCpf() {
     setResultados([]);
 
     registrarAuditoria({
-      tipo_acao: "pesquisa_cpf",
+      tipo_acao: "litispendencia",
       cpf_consultado: cpfNumerico,
-      termo_buscado: "Litispendência - " + CONSULTAS.map(c => c.label).join(", "),
+      termo_buscado: CONSULTAS.map(c => c.label).join(", "),
     });
 
     for (const consulta of CONSULTAS) {

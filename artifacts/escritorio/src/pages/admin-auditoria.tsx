@@ -33,6 +33,7 @@ const TIPO_LABELS: Record<string, string> = {
   cadastro_novo: "Novo Cadastro",
   upload_documento: "Upload",
   pesquisa_cpf: "Pesquisa CPF",
+  litispendencia: "Litispendência",
 };
 
 const TIPO_COLORS: Record<string, string> = {
@@ -41,6 +42,7 @@ const TIPO_COLORS: Record<string, string> = {
   cadastro_novo: "bg-green-100 text-green-700",
   upload_documento: "bg-purple-100 text-purple-700",
   pesquisa_cpf: "bg-teal-100 text-teal-700",
+  litispendencia: "bg-indigo-100 text-indigo-700",
 };
 
 const PAGE_SIZE = 50;
