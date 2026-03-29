@@ -183,17 +183,22 @@ router.post("/auth/verify", async (req, res) => {
 
     const emailLower = email.toLowerCase();
 
-    const [usuario] = await db
+    let [usuario] = await db
       .select()
       .from(usuariosTable)
       .where(eq(usuariosTable.email, emailLower));
 
     if (!usuario) {
-      res.status(403).json({
-        authorized: false,
-        error: "Usuário não autorizado. Solicite acesso ao administrador.",
-      });
-      return;
+      const [newUser] = await db
+        .insert(usuariosTable)
+        .values({
+          email: emailLower,
+          nome: emailLower.split("@")[0].replace(/[._-]/g, " ").toUpperCase(),
+          role: "user",
+          ativo: true,
+        })
+        .returning();
+      usuario = newUser;
     }
 
     if (!usuario.ativo) {
