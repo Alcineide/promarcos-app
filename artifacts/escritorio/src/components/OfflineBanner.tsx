@@ -51,7 +51,10 @@ export function OfflineBanner() {
         >
           <div className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium">
             <WifiOff className="w-4 h-4" />
-            <span>Você está offline — os dados serão salvos localmente</span>
+            <span>
+              Você está offline — os dados serão salvos localmente
+              {pendingCount > 0 && ` (${pendingCount} pendente${pendingCount > 1 ? "s" : ""})`}
+            </span>
           </div>
         </motion.div>
       )}
