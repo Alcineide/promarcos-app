@@ -40,8 +40,8 @@ export default function LoginPage() {
               alt="Mendes Advocacia"
               className="w-24 h-24 rounded-2xl object-cover mb-4 shadow-lg"
             />
-            <h1 className="text-2xl font-bold text-[#1c3654] tracking-tight">PROMARCOS</h1>
-            <p className="text-sm text-gray-500 mt-1">Sistema de Gestão Jurídica</p>
+            <h1 className="text-2xl font-bold text-[#1c3654] tracking-tight">Promarcos</h1>
+            <p className="text-[10px] font-medium text-[#6ba3d6] tracking-[0.2em] uppercase mt-1">Clientes</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
