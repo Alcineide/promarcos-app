@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/lib/auth-context";
-import { Shield, ShieldCheck, UserPlus, Trash2, Loader2, Crown, UserCog, ToggleLeft, ToggleRight, Smartphone, X } from "lucide-react";
+import { Shield, ShieldCheck, UserPlus, Trash2, Loader2, Crown, UserCog, ToggleLeft, ToggleRight, Smartphone, X, Clock, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -280,13 +280,54 @@ export default function AdminUsuarios() {
           </div>
         )}
 
+        {!loading && usuarios.filter(u => !u.ativo && !u.isSuperAdmin).length > 0 && (
+          <div className="bg-amber-50 rounded-2xl p-5 shadow-sm border-2 border-amber-300 space-y-3">
+            <h2 className="font-bold text-lg text-amber-800 flex items-center gap-2">
+              <Clock className="w-5 h-5" />
+              Solicitações de Acesso Pendentes
+              <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                {usuarios.filter(u => !u.ativo && !u.isSuperAdmin).length}
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {usuarios.filter(u => !u.ativo && !u.isSuperAdmin).map((u) => (
+                <div key={u.id} className="flex items-center justify-between gap-3 p-4 bg-white rounded-xl border border-amber-200">
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-800">{u.nome}</p>
+                    <p className="text-sm text-gray-500">{u.email}</p>
+                    {u.createdAt && (
+                      <p className="text-xs text-gray-400 mt-0.5">Solicitado em: {formatDate(u.createdAt)}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleToggleAtivo(u)}
+                      className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Aprovar
+                    </button>
+                    <button
+                      onClick={() => handleDelete(u)}
+                      className="px-4 py-2 bg-red-500 text-white text-sm font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Rejeitar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
         ) : (
           <div className="space-y-3">
-            {usuarios.map((u) => (
+            {usuarios.filter(u => u.ativo || u.isSuperAdmin).map((u) => (
               <div
                 key={u.id}
                 className={cn(

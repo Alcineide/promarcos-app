@@ -247,8 +247,8 @@ router.delete("/usuarios/:id", async (req, res) => {
       .select()
       .from(usuariosTable)
       .where(eq(usuariosTable.email, requesterEmail.toLowerCase()));
-    if (!requester || !requester.isSuperAdmin || !requester.ativo) {
-      res.status(403).json({ error: "Apenas o super administrador pode remover usuários" });
+    if (!requester || !requester.ativo) {
+      res.status(401).json({ error: "Não autenticado" });
       return;
     }
 
@@ -267,6 +267,17 @@ router.delete("/usuarios/:id", async (req, res) => {
     }
     if (target.isSuperAdmin) {
       res.status(403).json({ error: "O super administrador não pode ser removido" });
+      return;
+    }
+
+    const isAdmin = requester.role === "admin" || requester.isSuperAdmin;
+    if (!isAdmin) {
+      res.status(403).json({ error: "Apenas administradores podem remover usuários" });
+      return;
+    }
+
+    if (target.ativo && !requester.isSuperAdmin) {
+      res.status(403).json({ error: "Apenas o super administrador pode remover usuários ativos" });
       return;
     }
 

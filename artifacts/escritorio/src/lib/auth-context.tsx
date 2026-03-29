@@ -13,9 +13,10 @@ interface AuthContextType {
   isLoading: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
-  login: (email: string, senha: string) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, senha: string) => Promise<{ success: boolean; message?: string; needsRegistration?: boolean; pending?: boolean }>;
   logout: () => void;
   refreshRole: () => Promise<void>;
+  requestAccess: (email: string, nomeCompleto: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -62,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { role: "user", isSuperAdmin: false };
   };
 
-  const verifyAuth = async (email: string): Promise<{ allowed: boolean; message?: string; nome?: string; role?: string }> => {
+  const verifyAuth = async (email: string): Promise<{ allowed: boolean; message?: string; needsRegistration?: boolean; pending?: boolean }> => {
     try {
       const deviceId = getOrCreateDeviceId();
       const deviceName = getDeviceName();
@@ -76,11 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return {
           allowed: false,
           message: data.error || "Acesso não autorizado.",
+          needsRegistration: !!data.needsRegistration,
+          pending: !!data.pending,
         };
       }
-      return { allowed: true, nome: data.nome, role: data.role };
-    } catch {
       return { allowed: true };
+    } catch {
+      return { allowed: false, message: "Erro ao verificar autorização. Tente novamente." };
     }
   };
 
@@ -111,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restore();
   }, []);
 
-  const login = async (email: string, senha: string): Promise<{ success: boolean; message?: string }> => {
+  const login = async (email: string, senha: string): Promise<{ success: boolean; message?: string; needsRegistration?: boolean; pending?: boolean }> => {
     try {
       const res = await fetch("/api/promarcos/login", {
         method: "POST",
@@ -128,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const authCheck = await verifyAuth(email);
       if (!authCheck.allowed) {
-        return { success: false, message: authCheck.message };
+        return { success: false, message: authCheck.message, needsRegistration: authCheck.needsRegistration, pending: authCheck.pending };
       }
 
       const roleInfo = await fetchRole(email);
@@ -144,6 +147,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: true };
     } catch {
       return { success: false, message: "Erro ao conectar com o servidor" };
+    }
+  };
+
+  const requestAccess = async (email: string, nomeCompleto: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const res = await fetch("/api/auth/request-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, nomeCompleto }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, message: data.error || "Erro ao enviar solicitação" };
+      }
+      if (data.status === "already_active") {
+        return { success: true, message: "Você já tem acesso. Tente fazer login novamente." };
+      }
+      return { success: true, message: data.message || "Solicitação enviada com sucesso!" };
+    } catch {
+      return { success: false, message: "Erro ao enviar solicitação" };
     }
   };
 
@@ -164,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isSuperAdmin = !!user?.isSuperAdmin;
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAdmin, isSuperAdmin, login, logout, refreshRole }}>
+    <AuthContext.Provider value={{ user, isLoading, isAdmin, isSuperAdmin, login, logout, refreshRole, requestAccess }}>
       {children}
     </AuthContext.Provider>
   );

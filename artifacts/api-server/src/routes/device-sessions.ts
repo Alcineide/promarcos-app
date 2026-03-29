@@ -167,6 +167,50 @@ router.delete("/auth/devices/:id", async (req, res) => {
   }
 });
 
+router.post("/auth/request-access", async (req, res) => {
+  try {
+    const { email, nomeCompleto } = req.body as {
+      email: string;
+      nomeCompleto: string;
+    };
+
+    if (!email || !nomeCompleto || nomeCompleto.trim().length < 3) {
+      res.status(400).json({ error: "Email e nome completo são obrigatórios (mínimo 3 caracteres)" });
+      return;
+    }
+
+    const emailLower = email.toLowerCase();
+
+    const [existing] = await db
+      .select()
+      .from(usuariosTable)
+      .where(eq(usuariosTable.email, emailLower));
+
+    if (existing) {
+      if (existing.ativo) {
+        res.json({ status: "already_active" });
+      } else {
+        res.json({ status: "pending", message: "Sua solicitação já foi enviada. Aguarde a aprovação do administrador." });
+      }
+      return;
+    }
+
+    await db
+      .insert(usuariosTable)
+      .values({
+        email: emailLower,
+        nome: nomeCompleto.trim().toUpperCase(),
+        role: "user",
+        ativo: false,
+      });
+
+    res.json({ status: "requested", message: "Solicitação enviada! Aguarde a aprovação do administrador." });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Erro interno" });
+  }
+});
+
 router.post("/auth/verify", async (req, res) => {
   try {
     const { email, deviceId, deviceName, sistema } = req.body as {
@@ -183,28 +227,25 @@ router.post("/auth/verify", async (req, res) => {
 
     const emailLower = email.toLowerCase();
 
-    let [usuario] = await db
+    const [usuario] = await db
       .select()
       .from(usuariosTable)
       .where(eq(usuariosTable.email, emailLower));
 
     if (!usuario) {
-      const [newUser] = await db
-        .insert(usuariosTable)
-        .values({
-          email: emailLower,
-          nome: emailLower.split("@")[0].replace(/[._-]/g, " ").toUpperCase(),
-          role: "user",
-          ativo: true,
-        })
-        .returning();
-      usuario = newUser;
+      res.status(403).json({
+        authorized: false,
+        needsRegistration: true,
+        error: "Primeiro acesso detectado. Informe seu nome completo para solicitar acesso.",
+      });
+      return;
     }
 
     if (!usuario.ativo) {
       res.status(403).json({
         authorized: false,
-        error: "Sua conta está desativada. Contate o administrador.",
+        pending: true,
+        error: "Sua solicitação de acesso está aguardando aprovação do administrador.",
       });
       return;
     }
