@@ -27,3 +27,9 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+JUSBRASIL_EMAIL = "acessos.nucleomendesadv@gmail.com"
+JUSBRASIL_PASSWORD = "#Acessos2025"
