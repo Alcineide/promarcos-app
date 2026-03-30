@@ -6,10 +6,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  FileText,
+  Filter,
   Loader2,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface AuditLog {
   id: number;
@@ -116,8 +121,24 @@ export default function AdminAuditoria() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [page, setPage] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filtroColaborador, setFiltroColaborador] = useState("");
+  const [filtroDataDe, setFiltroDataDe] = useState("");
+  const [filtroDataAte, setFiltroDataAte] = useState("");
+  const [appliedColaborador, setAppliedColaborador] = useState("");
+  const [appliedDataDe, setAppliedDataDe] = useState("");
+  const [appliedDataAte, setAppliedDataAte] = useState("");
   const tableRef = useRef<HTMLDivElement>(null);
+
+  const buildFilterParams = useCallback((params: URLSearchParams) => {
+    if (appliedColaborador.trim()) params.set("colaborador", appliedColaborador.trim());
+    if (appliedDataDe) params.set("de", appliedDataDe);
+    if (appliedDataAte) params.set("ate", appliedDataAte + "T23:59:59");
+  }, [appliedColaborador, appliedDataDe, appliedDataAte]);
+
+  const hasFilters = appliedColaborador.trim() !== "" || appliedDataDe !== "" || appliedDataAte !== "";
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -125,6 +146,7 @@ export default function AdminAuditoria() {
       const params = new URLSearchParams();
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(page * PAGE_SIZE));
+      buildFilterParams(params);
 
       const res = await fetch(`/api/audit/admin-logs?${params.toString()}`, {
         headers: { "x-user-email": user?.email || "" },
@@ -138,7 +160,7 @@ export default function AdminAuditoria() {
     } finally {
       setLoading(false);
     }
-  }, [user?.email, page]);
+  }, [user?.email, page, buildFilterParams]);
 
   useEffect(() => {
     fetchLogs();
@@ -195,27 +217,33 @@ export default function AdminAuditoria() {
     return String(campos);
   };
 
+  const fetchAllFilteredLogs = async (): Promise<AuditLog[]> => {
+    let allLogs: AuditLog[] = [];
+    let offset = 0;
+    const batchSize = 200;
+    let hasMore = true;
+
+    while (hasMore) {
+      const params = new URLSearchParams();
+      params.set("limit", String(batchSize));
+      params.set("offset", String(offset));
+      buildFilterParams(params);
+      const res = await fetch(`/api/audit/admin-logs?${params.toString()}`, {
+        headers: { "x-user-email": user?.email || "" },
+      });
+      if (!res.ok) break;
+      const data = await res.json();
+      allLogs = allLogs.concat(data.logs);
+      offset += batchSize;
+      hasMore = allLogs.length < data.total;
+    }
+    return allLogs;
+  };
+
   const handleDownloadCSV = async () => {
     setDownloading(true);
     try {
-      let allLogs: AuditLog[] = [];
-      let offset = 0;
-      const batchSize = 200;
-      let hasMore = true;
-
-      while (hasMore) {
-        const params = new URLSearchParams();
-        params.set("limit", String(batchSize));
-        params.set("offset", String(offset));
-        const res = await fetch(`/api/audit/admin-logs?${params.toString()}`, {
-          headers: { "x-user-email": user?.email || "" },
-        });
-        if (!res.ok) break;
-        const data = await res.json();
-        allLogs = allLogs.concat(data.logs);
-        offset += batchSize;
-        hasMore = allLogs.length < data.total;
-      }
+      const allLogs = await fetchAllFilteredLogs();
 
       const header = "Data/Hora;Colaborador;Ação;CPF;Detalhes;Alterações";
       const rows = allLogs.map((l) => {
@@ -244,6 +272,88 @@ export default function AdminAuditoria() {
     }
   };
 
+  const handleDownloadPDF = async () => {
+    setDownloadingPdf(true);
+    try {
+      const allLogs = await fetchAllFilteredLogs();
+
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+      doc.setFontSize(16);
+      doc.setTextColor(28, 54, 84);
+      doc.text("Mendes Advocacia — Relatório de Auditoria", 14, 15);
+
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      const filterParts: string[] = [];
+      if (appliedDataDe) filterParts.push(`De: ${appliedDataDe.split("-").reverse().join("/")}`);
+      if (appliedDataAte) filterParts.push(`Até: ${appliedDataAte.split("-").reverse().join("/")}`);
+      if (appliedColaborador.trim()) filterParts.push(`Colaborador: ${appliedColaborador.trim()}`);
+      const filterText = filterParts.length > 0 ? filterParts.join("  |  ") : "Sem filtros aplicados";
+      doc.text(`${filterText}  —  ${allLogs.length} registro(s)  —  Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, 14, 21);
+
+      const tableData = allLogs.map((l) => [
+        formatDate(l.dataHora),
+        l.colaboradorEmail,
+        TIPO_LABELS[l.tipoAcao] || l.tipoAcao,
+        l.cpfConsultado ? formatCpf(l.cpfConsultado) : "—",
+        gerarDetalhes(l),
+        formatCamposAlterados(l.camposAlterados) || "—",
+      ]);
+
+      autoTable(doc, {
+        startY: 25,
+        head: [["Data/Hora", "Colaborador", "Ação", "CPF", "Detalhes", "Alterações"]],
+        body: tableData,
+        styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak", textColor: [40, 40, 40] },
+        headStyles: { fillColor: [28, 54, 84], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+        columnStyles: {
+          0: { cellWidth: 32 },
+          1: { cellWidth: 45 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 55 },
+          5: { cellWidth: 80 },
+        },
+        margin: { left: 14, right: 14 },
+        didDrawPage: (data) => {
+          const pageCount = doc.getNumberOfPages();
+          doc.setFontSize(7);
+          doc.setTextColor(150, 150, 150);
+          doc.text(
+            `Página ${data.pageNumber} de ${pageCount}`,
+            doc.internal.pageSize.getWidth() - 14,
+            doc.internal.pageSize.getHeight() - 7,
+            { align: "right" }
+          );
+        },
+      });
+
+      doc.save(`auditoria_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch {
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleApplyFilters = () => {
+    setAppliedColaborador(filtroColaborador);
+    setAppliedDataDe(filtroDataDe);
+    setAppliedDataAte(filtroDataAte);
+    setPage(0);
+  };
+
+  const handleClearFilters = () => {
+    setFiltroColaborador("");
+    setFiltroDataDe("");
+    setFiltroDataAte("");
+    setAppliedColaborador("");
+    setAppliedDataDe("");
+    setAppliedDataAte("");
+    setPage(0);
+  };
+
   return (
     <Layout>
       <div className="max-w-full mx-auto space-y-5">
@@ -257,7 +367,22 @@ export default function AdminAuditoria() {
               {total} registro{total !== 1 ? "s" : ""} de atividade{total !== 1 ? "s" : ""}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm border transition-all",
+                showFilters || hasFilters
+                  ? "bg-blue-50 border-blue-300 text-blue-700"
+                  : "bg-card border-border text-foreground hover:bg-muted"
+              )}
+            >
+              <Filter className="w-4 h-4" />
+              Filtros
+              {hasFilters && (
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              )}
+            </button>
             <button
               onClick={() => { setPage(0); fetchLogs(); }}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-muted transition-all"
@@ -268,13 +393,74 @@ export default function AdminAuditoria() {
             <button
               onClick={handleDownloadCSV}
               disabled={downloading || total === 0}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-gradient-to-r from-[#1c3654] to-[#2a5080] text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-gradient-to-r from-[#1c3654] to-[#2a5080] text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50"
             >
               {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Baixar CSV
+              CSV
+            </button>
+            <button
+              onClick={handleDownloadPDF}
+              disabled={downloadingPdf || total === 0}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-gradient-to-r from-red-700 to-red-500 text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50"
+            >
+              {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+              PDF
             </button>
           </div>
         </header>
+
+        {showFilters && (
+          <div className="bg-card border border-border/50 rounded-2xl p-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row gap-3 items-end">
+              <div className="flex-1 min-w-[180px]">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Colaborador</label>
+                <input
+                  type="text"
+                  value={filtroColaborador}
+                  onChange={(e) => setFiltroColaborador(e.target.value)}
+                  placeholder="E-mail do colaborador"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div className="min-w-[150px]">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Data inicial</label>
+                <input
+                  type="date"
+                  value={filtroDataDe}
+                  onChange={(e) => setFiltroDataDe(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div className="min-w-[150px]">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Data final</label>
+                <input
+                  type="date"
+                  value={filtroDataAte}
+                  onChange={(e) => setFiltroDataAte(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleApplyFilters}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg font-semibold text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <Filter className="w-4 h-4" />
+                  Filtrar
+                </button>
+                {hasFilters && (
+                  <button
+                    onClick={handleClearFilters}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                    Limpar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-12">
