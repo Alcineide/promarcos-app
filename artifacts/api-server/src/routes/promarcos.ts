@@ -292,9 +292,25 @@ router.post("/promarcos/arquivo", async (req, res) => {
     const pessoaJson = JSON.stringify({ codigo: pessoaCodigo });
     const fileBuffer = Buffer.from(fileBase64, "base64");
     const resolvedMime = mimeType || (fileName?.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+
+    const mimeToExt: Record<string, string> = {
+      "application/pdf": ".pdf",
+      "image/jpeg": ".jpg",
+      "image/png": ".png",
+      "image/webp": ".webp",
+      "image/gif": ".gif",
+      "image/bmp": ".bmp",
+    };
     let resolvedFileName = fileName || "documento.jpg";
-    if (resolvedMime === "application/pdf" && !resolvedFileName.toLowerCase().endsWith(".pdf")) {
-      resolvedFileName = resolvedFileName + ".pdf";
+    const expectedExt = mimeToExt[resolvedMime];
+    if (expectedExt) {
+      const lower = resolvedFileName.toLowerCase();
+      const hasCorrectExt = resolvedMime === "image/jpeg"
+        ? lower.endsWith(".jpg") || lower.endsWith(".jpeg")
+        : lower.endsWith(expectedExt);
+      if (!hasCorrectExt) {
+        resolvedFileName = resolvedFileName + expectedExt;
+      }
     }
     const blob = new Blob([fileBuffer], { type: resolvedMime });
 

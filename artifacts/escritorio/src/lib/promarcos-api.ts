@@ -384,6 +384,24 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+const MIME_TO_EXT: Record<string, string> = {
+  "application/pdf": ".pdf",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "image/bmp": ".bmp",
+};
+
+function ensureFileExtension(name: string, mimeType: string): string {
+  const ext = MIME_TO_EXT[mimeType];
+  if (!ext) return name;
+  if (name.toLowerCase().endsWith(ext)) return name;
+  const altExts = mimeType === "image/jpeg" ? [".jpg", ".jpeg"] : [ext];
+  if (altExts.some(e => name.toLowerCase().endsWith(e))) return name;
+  return name + ext;
+}
+
 export async function uploadArquivoPromarcos(
   pessoaCodigo: number,
   blob: Blob,
@@ -393,17 +411,18 @@ export async function uploadArquivoPromarcos(
 ): Promise<{ sucesso: boolean; mensagem?: string }> {
   try {
     const base64 = await blobToBase64(blob);
-    const mimeType = blob.type || (fileName.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+    const mimeType = blob.type || (fileName.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+    const resolvedFileName = ensureFileExtension(fileName, mimeType);
     const res = await fetch(`${PROXY_BASE}/arquivo`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         pessoaCodigo,
-        fileName,
+        fileName: resolvedFileName,
         fileBase64: base64,
         mimeType,
         tipo: tipo || "Documento",
-        nome: nome || fileName,
+        nome: nome || resolvedFileName,
       }),
     });
     if (!res.ok) {
