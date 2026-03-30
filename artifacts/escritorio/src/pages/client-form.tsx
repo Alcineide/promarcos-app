@@ -974,15 +974,20 @@ export default function ClientForm() {
         toast({ title: "Erro", description: result.mensagem || "Falha ao gerar folha de rosto.", variant: "destructive" });
         return;
       }
-      const url = URL.createObjectURL(result.blob);
+      let pdfFileName = result.fileName || `folha_rosto_${promarcosCodigo}.pdf`;
+      if (!pdfFileName.toLowerCase().endsWith(".pdf")) {
+        pdfFileName = pdfFileName + ".pdf";
+      }
+      const pdfBlob = new Blob([result.blob], { type: "application/pdf" });
+      const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = result.fileName || `folha_rosto_${promarcosCodigo}.pdf`;
+      a.download = pdfFileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      const upload = await uploadArquivoPromarcos(promarcosCodigo, result.blob, result.fileName || `folha_rosto_${promarcosCodigo}.pdf`);
+      const upload = await uploadArquivoPromarcos(promarcosCodigo, pdfBlob, pdfFileName);
       if (upload.sucesso) {
         toast({ title: "Folha de Rosto gerada!", description: "Documento gerado e enviado ao Promarcos com sucesso." });
       } else {

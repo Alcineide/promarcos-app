@@ -292,13 +292,17 @@ router.post("/promarcos/arquivo", async (req, res) => {
     const pessoaJson = JSON.stringify({ codigo: pessoaCodigo });
     const fileBuffer = Buffer.from(fileBase64, "base64");
     const resolvedMime = mimeType || (fileName?.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+    let resolvedFileName = fileName || "documento.jpg";
+    if (resolvedMime === "application/pdf" && !resolvedFileName.toLowerCase().endsWith(".pdf")) {
+      resolvedFileName = resolvedFileName + ".pdf";
+    }
     const blob = new Blob([fileBuffer], { type: resolvedMime });
 
     const form = new globalThis.FormData();
     form.append("pessoa", pessoaJson);
-    form.append("arquivos", blob, fileName || "documento.jpg");
+    form.append("arquivos", blob, resolvedFileName);
     form.append("tipos", tipo || "Documento");
-    form.append("nomes", nome || fileName || "Documento");
+    form.append("nomes", nome || resolvedFileName || "Documento");
 
     const upstream = await fetch(`${PROMARCOS_BASE}/pessoas/arquivo`, {
       method: "POST",
