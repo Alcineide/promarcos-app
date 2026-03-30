@@ -16,7 +16,18 @@ function getUserEmail(): string | null {
 }
 
 interface AuditParams {
-  tipo_acao: "consulta" | "alteracao" | "cadastro_novo" | "upload_documento" | "pesquisa_cpf";
+  tipo_acao:
+    | "consulta"
+    | "alteracao"
+    | "cadastro_novo"
+    | "upload_documento"
+    | "pesquisa_cpf"
+    | "litispendencia"
+    | "abertura_processo"
+    | "agendamento_veiculo"
+    | "checkin_veiculo"
+    | "checkout_veiculo"
+    | "prestacao_contas";
   cpf_consultado?: string;
   havia_cadastro?: string;
   campos_alterados?: Record<string, { old: unknown; new: unknown }>;

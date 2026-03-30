@@ -1,4 +1,7 @@
 import { Layout } from "@/components/layout";
+import { registrarAuditoria } from "@/lib/audit-service";
+
+type AuditTipo = "agendamento_veiculo" | "checkin_veiculo" | "checkout_veiculo" | "prestacao_contas";
 
 interface ActionCard {
   href: string;
@@ -8,6 +11,7 @@ interface ActionCard {
   colorClass: string;
   icon: React.ReactNode;
   tagColor: string;
+  auditTipo: AuditTipo;
 }
 
 const cards: ActionCard[] = [
@@ -18,6 +22,7 @@ const cards: ActionCard[] = [
     tag: "Reserva",
     colorClass: "reserva",
     tagColor: "bg-blue-500/15 text-blue-300",
+    auditTipo: "agendamento_veiculo",
     icon: (
       <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
         <rect x="3" y="5" width="22" height="20" rx="3" stroke="#60a5fa" strokeWidth="1.8" fill="none"/>
@@ -40,6 +45,7 @@ const cards: ActionCard[] = [
     tag: "Check-in",
     colorClass: "checkin",
     tagColor: "bg-emerald-500/15 text-emerald-300",
+    auditTipo: "checkin_veiculo",
     icon: (
       <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
         <path d="M2 17 L2 20 L5 20 M5 20 L23 20 M23 20 L26 20 L26 17 L24 17" stroke="#34d399" strokeWidth="1.7" strokeLinecap="round" fill="none"/>
@@ -60,6 +66,7 @@ const cards: ActionCard[] = [
     tag: "Check-out",
     colorClass: "checkout",
     tagColor: "bg-amber-500/15 text-amber-300",
+    auditTipo: "checkout_veiculo",
     icon: (
       <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
         <path d="M2 17 L2 20 L5 20 M5 20 L23 20 M23 20 L26 20 L26 17 L24 17" stroke="#fbbf24" strokeWidth="1.7" strokeLinecap="round" fill="none"/>
@@ -80,6 +87,7 @@ const cards: ActionCard[] = [
     tag: "Financeiro",
     colorClass: "prestacao",
     tagColor: "bg-purple-500/15 text-purple-300",
+    auditTipo: "prestacao_contas",
     icon: (
       <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
         <rect x="5" y="3" width="18" height="22" rx="3" stroke="#c084fc" strokeWidth="1.8" fill="none"/>
@@ -135,6 +143,12 @@ export default function Veiculos() {
                 href={card.href}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => {
+                  registrarAuditoria({
+                    tipo_acao: card.auditTipo,
+                    termo_buscado: card.title,
+                  });
+                }}
                 className={`group flex items-center gap-5 bg-card border border-border rounded-2xl px-5 py-5 transition-all duration-200 hover:-translate-y-0.5 ${c.border} ${c.bg}`}
               >
                 <div className={`w-13 h-13 rounded-2xl flex items-center justify-center flex-shrink-0 p-3 ${iconBg[card.colorClass]}`}>

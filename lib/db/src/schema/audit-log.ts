@@ -6,6 +6,12 @@ export const tipoAcaoPgEnum = pgEnum("tipo_acao_enum", [
   "cadastro_novo",
   "upload_documento",
   "pesquisa_cpf",
+  "litispendencia",
+  "abertura_processo",
+  "agendamento_veiculo",
+  "checkin_veiculo",
+  "checkout_veiculo",
+  "prestacao_contas",
 ]);
 
 export const tipoAcaoValues = [
@@ -14,6 +20,12 @@ export const tipoAcaoValues = [
   "cadastro_novo",
   "upload_documento",
   "pesquisa_cpf",
+  "litispendencia",
+  "abertura_processo",
+  "agendamento_veiculo",
+  "checkin_veiculo",
+  "checkout_veiculo",
+  "prestacao_contas",
 ] as const;
 
 export type TipoAcao = (typeof tipoAcaoValues)[number];

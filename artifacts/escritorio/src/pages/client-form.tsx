@@ -758,6 +758,13 @@ export default function ClientForm() {
         } else {
           toast({ title: "Sucesso", description: "Processo adicionado!" });
         }
+        registrarAuditoria({
+          tipo_acao: "abertura_processo",
+          cpf_consultado: watch("cpf"),
+          termo_buscado: novoProcesso.numeroProcesso
+            ? `Processo ${novoProcesso.numeroProcesso}`
+            : `Novo processo`,
+        });
         setProcessoModalOpen(false);
         queryClient.invalidateQueries({ queryKey: [`/api/clientes/${clientId}/processos`] });
       }
@@ -939,6 +946,13 @@ export default function ClientForm() {
       } else {
         result = await criarProcessoPromarcos(payload);
         if (result.sucesso) {
+          registrarAuditoria({
+            tipo_acao: "abertura_processo",
+            cpf_consultado: watch("cpf"),
+            termo_buscado: novoPromarkosProcesso.numeroprocesso
+              ? `Processo ${novoPromarkosProcesso.numeroprocesso}`
+              : `Nova pasta Promarcos`,
+          });
           toast({ title: "Processo criado!", description: "Nova pasta aberta no Promarcos com sucesso." });
           setPromarkosProcessoModalOpen(false);
           fetchPromarkosProcessos(promarcosCodigo);

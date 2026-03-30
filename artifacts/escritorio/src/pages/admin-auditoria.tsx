@@ -34,6 +34,11 @@ const TIPO_LABELS: Record<string, string> = {
   upload_documento: "Upload",
   pesquisa_cpf: "Pesquisa CPF",
   litispendencia: "Litispendência",
+  abertura_processo: "Novo Processo",
+  agendamento_veiculo: "Agendamento",
+  checkin_veiculo: "Check-in",
+  checkout_veiculo: "Check-out",
+  prestacao_contas: "Prestação de Contas",
 };
 
 const TIPO_COLORS: Record<string, string> = {
@@ -43,7 +48,65 @@ const TIPO_COLORS: Record<string, string> = {
   upload_documento: "bg-purple-100 text-purple-700",
   pesquisa_cpf: "bg-teal-100 text-teal-700",
   litispendencia: "bg-indigo-100 text-indigo-700",
+  abertura_processo: "bg-cyan-100 text-cyan-700",
+  agendamento_veiculo: "bg-sky-100 text-sky-700",
+  checkin_veiculo: "bg-emerald-100 text-emerald-700",
+  checkout_veiculo: "bg-orange-100 text-orange-700",
+  prestacao_contas: "bg-fuchsia-100 text-fuchsia-700",
 };
+
+const FIELD_LABELS: Record<string, string> = {
+  nome: "Nome", nomeCompleto: "Nome Completo", cpf: "CPF", rg: "RG",
+  rgRepresentante: "RG Representante", email: "E-mail", telefone: "Telefone",
+  telefone2: "Telefone 2", celular: "Celular", cep: "CEP",
+  logradouro: "Logradouro", numero: "Número", bairro: "Bairro",
+  cidade: "Cidade", estado: "Estado", complemento: "Complemento",
+  dataNascimento: "Data de Nascimento", nomeMae: "Nome da Mãe",
+  nomePai: "Nome do Pai", sexo: "Sexo", estadoCivil: "Estado Civil",
+  profissao: "Profissão", nacionalidade: "Nacionalidade",
+  observacao: "Observação", pis: "PIS/NIT", ctps: "CTPS",
+};
+
+function gerarDetalhes(log: AuditLog): string {
+  switch (log.tipoAcao) {
+    case "cadastro_novo":
+      return "Abertura de cadastro";
+    case "consulta":
+      return "Visualização de cadastro";
+    case "alteracao": {
+      if (log.camposAlterados && typeof log.camposAlterados === "object") {
+        const campos = Object.keys(log.camposAlterados as Record<string, unknown>);
+        if (campos.length > 0) {
+          const nomes = campos.map(c => FIELD_LABELS[c] || c);
+          return `Atualização: ${nomes.join(", ")}`;
+        }
+      }
+      return "Atualização de cadastro";
+    }
+    case "pesquisa_cpf":
+      if (log.termoBuscado) return `Busca: "${log.termoBuscado}"`;
+      return "Pesquisa de CPF";
+    case "litispendencia":
+      return "Consulta de litispendência";
+    case "upload_documento":
+      if (log.termoBuscado) return `Upload: ${log.termoBuscado}`;
+      return "Upload de documento";
+    case "abertura_processo":
+      if (log.termoBuscado) return log.termoBuscado;
+      return "Abertura de processo";
+    case "agendamento_veiculo":
+      return "Agendamento de veículo";
+    case "checkin_veiculo":
+      return "Check-in — Retirada de veículo";
+    case "checkout_veiculo":
+      return "Check-out — Devolução de veículo";
+    case "prestacao_contas":
+      return "Prestação de contas de veículo";
+    default:
+      if (log.termoBuscado) return log.termoBuscado;
+      return "—";
+  }
+}
 
 const PAGE_SIZE = 50;
 
@@ -110,15 +173,18 @@ export default function AdminAuditoria() {
         const obj = campos as Record<string, unknown>;
         const parts: string[] = [];
         for (const [key, val] of Object.entries(obj)) {
+          const label = FIELD_LABELS[key] || key;
           if (typeof val === "object" && val !== null) {
             const v = val as Record<string, unknown>;
             if ("de" in v && "para" in v) {
-              parts.push(`${key}: ${v.de} → ${v.para}`);
+              parts.push(`${label}: ${v.de} → ${v.para}`);
+            } else if ("old" in v && "new" in v) {
+              parts.push(`${label}: ${v.old} → ${v.new}`);
             } else {
-              parts.push(`${key}: ${JSON.stringify(val)}`);
+              parts.push(`${label}: ${JSON.stringify(val)}`);
             }
           } else {
-            parts.push(`${key}: ${val}`);
+            parts.push(`${label}: ${val}`);
           }
         }
         return parts.join("; ");
@@ -156,13 +222,7 @@ export default function AdminAuditoria() {
         const dt = formatDate(l.dataHora);
         const tipo = TIPO_LABELS[l.tipoAcao] || l.tipoAcao;
         const cpf = l.cpfConsultado ? formatCpf(l.cpfConsultado) : "";
-        const detalhe = l.termoBuscado
-          ? `Busca: ${l.termoBuscado}`
-          : l.haviacadastro
-          ? l.haviacadastro === "sim"
-            ? "Cliente já existia"
-            : "Cliente novo"
-          : "";
+        const detalhe = gerarDetalhes(l);
         const alteracoes = formatCamposAlterados(l.camposAlterados);
         return [dt, l.colaboradorEmail, tipo, cpf, detalhe, alteracoes]
           .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -271,14 +331,8 @@ export default function AdminAuditoria() {
                           <td className="px-4 py-3 whitespace-nowrap font-mono text-foreground">
                             {log.cpfConsultado ? formatCpf(log.cpfConsultado) : "—"}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground max-w-[200px] truncate">
-                            {log.termoBuscado
-                              ? `Busca: "${log.termoBuscado}"`
-                              : log.haviacadastro
-                              ? log.haviacadastro === "sim"
-                                ? "Cliente já existia"
-                                : "Cliente novo"
-                              : "—"}
+                          <td className="px-4 py-3 text-muted-foreground max-w-[300px] truncate" title={gerarDetalhes(log)}>
+                            {gerarDetalhes(log)}
                           </td>
                           <td className="px-4 py-3 text-muted-foreground max-w-[300px]">
                             {alteracoes ? (
