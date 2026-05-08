@@ -278,6 +278,29 @@ router.get("/promarcos/folharosto/:pessoaId", async (req, res) => {
   }
 });
 
+router.get("/promarcos/documento/:processoId/:tipoDocumento", async (req, res) => {
+  try {
+    const { processoId, tipoDocumento } = req.params;
+    const upstream = await fetch(`${PROMARCOS_BASE}/pessoas/relatorio/${processoId}/${tipoDocumento}`);
+    if (!upstream.ok) {
+      const text = await upstream.text();
+      res.status(upstream.status).send(text);
+      return;
+    }
+    const contentType = upstream.headers.get("content-type") || "application/pdf";
+    const contentDisposition = upstream.headers.get("content-disposition") || "";
+    res.setHeader("Content-Type", contentType);
+    if (contentDisposition) {
+      res.setHeader("Content-Disposition", contentDisposition);
+    }
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    res.send(buffer);
+  } catch (err) {
+    req.log.error(err);
+    res.status(502).json({ mensagem: "Erro ao gerar documento" });
+  }
+});
+
 router.post("/promarcos/arquivo", async (req, res) => {
   try {
     const { pessoaCodigo, fileName, fileBase64, tipo, nome, mimeType } = req.body as {

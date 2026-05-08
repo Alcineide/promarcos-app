@@ -3,7 +3,7 @@ import { useLocation, useParams, useSearch, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, editarProcessoPromarcos, gerarFolhaRosto, uploadArquivoPromarcos, buscarSocio, buscarIndicadoresProcesso, adicionarIndicador, removerIndicador, buscarSociosProcesso, adicionarSocio, removerSocio, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo, type ProcessoIndicador, type ProcessoSocioParsed, type BuscarSocioResult } from "@/lib/promarcos-api";
+import { buscarPorCpf, buscarEscritorios, salvarPessoa, buscarProcessos, buscarBeneficios, buscarBeneficioTipos, criarProcessoPromarcos, editarProcessoPromarcos, gerarFolhaRosto, uploadArquivoPromarcos, gerarDocumentoPromarcos, TIPO_DOCUMENTO, buscarSocio, buscarIndicadoresProcesso, adicionarIndicador, removerIndicador, buscarSociosProcesso, adicionarSocio, removerSocio, type PromarkosPessoa, type PromarkosProcesso, type PromarkosEscritorio, type PromarkosBeneficio, type PromarkosBeneficioTipo, type ProcessoIndicador, type ProcessoSocioParsed, type BuscarSocioResult } from "@/lib/promarcos-api";
 import { 
   User, Phone, MapPin, FileText, FolderOpen, Save, 
   ArrowLeft, CheckCircle2, Copy, FilePlus2, DownloadCloud, Trash2, Briefcase, Loader2, RefreshCw, ExternalLink,
@@ -543,6 +543,19 @@ export default function ClientForm() {
     }
   }, [promarkosPreloaded, isEditing]);
 
+  const DOC_NAME_TO_TIPO: Record<string, number> = {
+    "Procuração Extra": TIPO_DOCUMENTO.ProcuracaoExtra,
+    "Contrato": TIPO_DOCUMENTO.Contrato,
+    "Declaração não incidência": TIPO_DOCUMENTO.DeclaracaoNaoIncidencia,
+    "Declaração Hipossuficiência": TIPO_DOCUMENTO.DeclaracaoHipossuficiencia,
+    "Termo de Risco": TIPO_DOCUMENTO.TermoReconhecimento,
+    "Revogação": TIPO_DOCUMENTO.RevogacaoProcuracao,
+  };
+
+  const getActiveProcessoId = (): number | null => {
+    return promarkosProcessos[0]?.id ?? null;
+  };
+
   const generateDoc = async (name: string) => {
     if (!isOnline) {
       toast({ title: "Requer internet", description: "A geração de documentos e assinatura digital requer conexão com a internet.", variant: "destructive" });
@@ -551,6 +564,57 @@ export default function ClientForm() {
     const clienteData = getClienteDocData();
     if (!clienteData.nomeCompleto || !clienteData.cpf) {
       toast({ title: "Erro", description: "Preencha os dados do cliente antes de gerar documentos.", variant: "destructive" });
+      return;
+    }
+
+    const processoId = getActiveProcessoId();
+
+    if (processoId && promarcosCodigo) {
+      setGeneratingDoc(name);
+      try {
+        if (name === "Gerar Todos") {
+          const result = await gerarDocumentoPromarcos(processoId, TIPO_DOCUMENTO.Todos);
+          if (!result.sucesso) {
+            toast({ title: "Erro", description: result.mensagem || "Falha ao gerar documentos", variant: "destructive" });
+          } else if (result.isText) {
+            toast({ title: "Sucesso", description: result.textMessage || "Todos os documentos foram gerados no Promarcos." });
+          } else {
+            toast({ title: "Sucesso", description: "Todos os documentos foram gerados no Promarcos." });
+          }
+        } else {
+          const tipoDoc = DOC_NAME_TO_TIPO[name];
+          if (!tipoDoc) {
+            toast({ title: "Erro", description: `Tipo de documento "${name}" não reconhecido.`, variant: "destructive" });
+            setGeneratingDoc(null);
+            return;
+          }
+          const result = await gerarDocumentoPromarcos(processoId, tipoDoc);
+          if (!result.sucesso) {
+            toast({ title: "Erro", description: result.mensagem || "Falha ao gerar documento", variant: "destructive" });
+          } else if (result.blob) {
+            const url = URL.createObjectURL(result.blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = result.fileName || `${name}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast({ title: "Documento Gerado", description: `${name} gerado e baixado com sucesso.` });
+          } else if (result.isText) {
+            toast({ title: "Sucesso", description: result.textMessage || `${name} gerado no Promarcos.` });
+          }
+        }
+        registrarAuditoria({
+          tipo_acao: "abertura_processo",
+          cpf_consultado: watch("cpf"),
+          termo_buscado: `Doc: ${name}`,
+        });
+        await fetchZapsignDocs(clienteData.cpf);
+      } catch {
+        toast({ title: "Erro", description: "Erro ao conectar com o servidor", variant: "destructive" });
+      }
+      setGeneratingDoc(null);
       return;
     }
 

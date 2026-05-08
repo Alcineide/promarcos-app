@@ -47,3 +47,13 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Expo prebuild (gerado pelo Codemagic/EAS — nunca commitar)
+artifacts/scanner-mobile/ios/
+artifacts/scanner-mobile/android/
+artifacts/scanner-mobile/build/
+
+# Codemagic local artifacts
+build/
+*.ipa
+*.app.dSYM.zip

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Promarcos Clientes",
     "slug": "scanner-mobile",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mendesadvocacia",
@@ -15,11 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "br.com.mendesadvocacia.scanner",
+      "bundleIdentifier": "com.nucleomendesadvocacia.promarcos",
       "infoPlist": {
         "NSCameraUsageDescription": "Usado para escanear documentos dos clientes com detecção automática de bordas",
         "NSPhotoLibraryUsageDescription": "Salvar documentos escaneados na galeria",
         "NSPhotoLibraryAddUsageDescription": "Salvar documentos escaneados na galeria",
+        "NSLocationWhenInUseUsageDescription": "Registra a localização aproximada de ações de auditoria do colaborador",
+        "NSMicrophoneUsageDescription": "Não utilizamos microfone, requerido apenas pelas dependências de câmera",
+        "ITSAppUsesNonExemptEncryption": false,
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true
       }
@@ -29,7 +32,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#1E3A5F"
       },
-      "package": "br.com.mendesadvocacia.scanner",
+      "package": "com.nucleomendesadvocacia.promarcos",
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -37,12 +40,68 @@
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
         "READ_MEDIA_AUDIO",
-        "MANAGE_DOCUMENTS"
+        "MANAGE_DOCUMENTS",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1E3A5F"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "deploymentTarget": "15.1"
+          },
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Usado para escanear documentos dos clientes com detecção automática de bordas",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Selecionar imagens para anexar aos processos dos clientes"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Registra a localização aproximada de ações de auditoria do colaborador"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Salvar documentos escaneados na galeria",
+          "savePhotosPermission": "Salvar documentos escaneados na galeria",
+          "isAccessMediaLocationEnabled": false
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     },

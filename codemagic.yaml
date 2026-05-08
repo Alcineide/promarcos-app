@@ -1,0 +1,130 @@
+workflows:
+  ios-workflow:
+    name: iOS Workflow - Expo to TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+
+    integrations:
+      app_store_connect: Codemagic
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.nucleomendesadvocacia.promarcos
+
+      vars:
+        APP_STORE_APPLE_ID: 6759395078
+        APP_DIR: "artifacts/scanner-mobile"
+        EXPO_PUBLIC_DOMAIN: "office-client-manager--marcosaurelionu.replit.app"
+        EXPO_NO_TELEMETRY: "1"
+        CI: "1"
+
+      node: 20
+      xcode: latest
+      cocoapods: default
+
+    cache:
+      cache_paths:
+        - $CM_BUILD_DIR/node_modules
+        - $CM_BUILD_DIR/artifacts/scanner-mobile/node_modules
+        - $CM_BUILD_DIR/artifacts/scanner-mobile/ios/Pods
+        - $HOME/.pnpm-store
+        - $HOME/Library/Caches/CocoaPods
+
+    scripts:
+      - name: Show environment
+        script: |
+          set -e
+          echo "Node: $(node -v)"
+          echo "NPM:  $(npm -v)"
+          echo "Xcode: $(xcodebuild -version | head -n 1)"
+          echo "Pod:  $(pod --version)"
+          echo "App dir: $APP_DIR"
+          echo "Bundle ID: com.nucleomendesadvocacia.promarcos"
+
+      - name: Install pnpm
+        script: |
+          set -e
+          npm install -g pnpm@9
+          pnpm config set store-dir "$HOME/.pnpm-store"
+          pnpm --version
+
+      - name: Install workspace dependencies (root)
+        script: |
+          set -e
+          pnpm install --frozen-lockfile
+
+      - name: Validate Expo config
+        script: |
+          set -e
+          cd "$APP_DIR"
+          echo "App version (app.json):"
+          node -e "console.log(require('./app.json').expo.version)"
+          echo "Plugins:"
+          node -e "console.log(JSON.stringify(require('./app.json').expo.plugins, null, 2))"
+          echo "Running expo doctor (non-blocking)..."
+          npx expo-doctor || true
+
+      - name: Expo prebuild (generate native iOS project)
+        script: |
+          set -e
+          cd "$APP_DIR"
+          rm -rf ios
+          npx expo prebuild --platform ios --clean --no-install
+          echo "Generated iOS project:"
+          ls -la ios
+
+      - name: Install pods
+        script: |
+          set -e
+          cd "$APP_DIR/ios"
+          pod install --repo-update
+
+      - name: Apply signing (Codemagic-managed certificates)
+        script: |
+          set -e
+          cd "$APP_DIR/ios"
+          xcode-project use-profiles
+
+      - name: Increment build number
+        script: |
+          set -e
+          cd "$APP_DIR/ios"
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0")
+          if [ -z "$LATEST" ] || ! [[ "$LATEST" =~ ^[0-9]+$ ]]; then LATEST=0; fi
+          NEXT=$(($LATEST + 1))
+          echo "Latest TestFlight build: $LATEST -> Setting build number to $NEXT"
+          agvtool new-version -all "$NEXT"
+
+      - name: Build IPA
+        script: |
+          set -e
+          cd "$APP_DIR"
+          WORKSPACE=$(ls -d ios/*.xcworkspace 2>/dev/null | head -n 1)
+          if [ -z "$WORKSPACE" ]; then
+            echo "::error:: No .xcworkspace found in ios/"
+            exit 1
+          fi
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          echo "Building workspace=$WORKSPACE scheme=$SCHEME"
+          xcode-project build-ipa \
+            --workspace "$WORKSPACE" \
+            --scheme "$SCHEME" \
+            --config Release
+
+    artifacts:
+      - artifacts/scanner-mobile/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - artifacts/scanner-mobile/ios/build/**/*.dSYM.zip
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+      email:
+        recipients:
+          - marcosaurelio.nucleomendesadv@gmail.com
+        notify:
+          success: true
+          failure: true

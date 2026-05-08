@@ -355,6 +355,45 @@ export async function salvarPessoa(payload: SalvarPessoaPayload): Promise<{ suce
   return res.json();
 }
 
+export const TIPO_DOCUMENTO = {
+  FolhaRosto: 1,
+  ProcuracaoExtra: 2,
+  Contrato: 3,
+  DeclaracaoNaoIncidencia: 4,
+  DeclaracaoHipossuficiencia: 5,
+  TermoReconhecimento: 6,
+  RevogacaoProcuracao: 7,
+  Todos: 99,
+} as const;
+
+export type TipoDocumento = typeof TIPO_DOCUMENTO[keyof typeof TIPO_DOCUMENTO];
+
+export async function gerarDocumentoPromarcos(
+  processoId: number,
+  tipoDocumento: TipoDocumento,
+): Promise<{ sucesso: boolean; blob?: Blob; fileName?: string; mensagem?: string; isText?: boolean; textMessage?: string }> {
+  try {
+    const res = await fetch(`${PROXY_BASE}/documento/${processoId}/${tipoDocumento}`);
+    if (!res.ok) {
+      const text = await res.text();
+      return { sucesso: false, mensagem: text || `Erro ${res.status}` };
+    }
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/pdf")) {
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="?([^";\s]+)"?/);
+      let fileName = match?.[1] || `documento_${processoId}.pdf`;
+      if (!fileName.toLowerCase().endsWith(".pdf")) fileName += ".pdf";
+      return { sucesso: true, blob, fileName };
+    }
+    const text = await res.text();
+    return { sucesso: true, isText: true, textMessage: text };
+  } catch {
+    return { sucesso: false, mensagem: "Erro ao conectar com o Promarcos" };
+  }
+}
+
 export async function gerarFolhaRosto(pessoaId: number): Promise<{ sucesso: boolean; blob?: Blob; fileName?: string; mensagem?: string }> {
   try {
     const res = await fetch(`${PROXY_BASE}/folharosto/${pessoaId}`);
