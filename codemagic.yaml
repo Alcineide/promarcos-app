@@ -57,14 +57,24 @@ workflows:
           pnpm --version
           pnpm config set store-dir "$HOME/.pnpm-store"
 
+      - name: Configure pnpm for Expo (hoisted node_modules)
+        script: |
+          set -e
+          # Metro/Babel não conseguem resolver babel-preset-expo em pnpm
+          # com node_modules isolado. Adicionamos node-linker=hoisted ao
+          # .npmrc só na build (não afeta o repo local do dev).
+          echo "" >> .npmrc
+          echo "# Codemagic build override" >> .npmrc
+          echo "node-linker=hoisted" >> .npmrc
+          echo ".npmrc final:"
+          cat .npmrc
+
       - name: Install scanner-mobile dependencies
         script: |
           set -e
           # Filtramos para o pacote do app mobile só. O workspace tem overrides
           # que removem binários darwin de esbuild/rollup/tailwindcss (otimização
           # do Replit Linux); o filter evita instalar essas libs no Mac.
-          # --no-frozen-lockfile porque adicionamos expo-build-properties e o
-          # lockfile ainda não foi atualizado em ambiente local.
           pnpm install \
             --no-frozen-lockfile \
             --filter @workspace/scanner-mobile
