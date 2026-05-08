@@ -48,6 +48,9 @@ Thumbs.db
 .cache/
 .local/
 
+# Anexos temporários (screenshots/notas coladas) — nunca commitar
+attached_assets/
+
 # Expo prebuild (gerado pelo Codemagic/EAS — nunca commitar)
 artifacts/scanner-mobile/ios/
 artifacts/scanner-mobile/android/
