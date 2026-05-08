@@ -126,10 +126,17 @@ workflows:
           set -e
           cd "$APP_DIR"
           # expo-router precisa saber onde está a pasta `app/` em build time.
-          # Em monorepos pnpm o auto-detect do babel falha; setamos explícito.
+          # Em monorepos pnpm o auto-detect falha; setamos por múltiplos canais:
+          # 1) export shell (xcodebuild herda env)
+          # 2) .env.local (Expo lê automaticamente em build time)
+          # 3) ios/.xcode.env.local (script de bundle do RN faz source disso)
           export EXPO_ROUTER_APP_ROOT="$CM_BUILD_DIR/artifacts/scanner-mobile/app"
           echo "EXPO_ROUTER_APP_ROOT=$EXPO_ROUTER_APP_ROOT"
           ls "$EXPO_ROUTER_APP_ROOT" || (echo "::error:: app/ não encontrado"; exit 1)
+
+          echo "EXPO_ROUTER_APP_ROOT=$EXPO_ROUTER_APP_ROOT" > .env.local
+          echo "export EXPO_ROUTER_APP_ROOT=\"$EXPO_ROUTER_APP_ROOT\"" > ios/.xcode.env.local
+          echo "Configuração propagada via .env.local e ios/.xcode.env.local"
 
           WORKSPACE=$(ls -d ios/*.xcworkspace 2>/dev/null | head -n 1)
           if [ -z "$WORKSPACE" ]; then
