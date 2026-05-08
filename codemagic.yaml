@@ -45,7 +45,11 @@ workflows:
       - name: Install pnpm
         script: |
           set -e
-          npm install -g pnpm@9
+          if command -v pnpm >/dev/null 2>&1; then
+            echo "pnpm já instalado: $(pnpm --version)"
+          else
+            npm install -g pnpm@9 --force
+          fi
           pnpm config set store-dir "$HOME/.pnpm-store"
           pnpm --version
 
