@@ -45,13 +45,17 @@ workflows:
       - name: Install pnpm
         script: |
           set -e
-          if command -v pnpm >/dev/null 2>&1; then
-            echo "pnpm já instalado: $(pnpm --version)"
-          else
-            npm install -g pnpm@9 --force
-          fi
-          pnpm config set store-dir "$HOME/.pnpm-store"
+          # Codemagic macOS builder vem com corepack ativo e yarn fixado em
+          # /Users/builder/package.json — isso faz o `pnpm` global ser
+          # interceptado e redirecionado para yarn. Solução: desativar
+          # corepack e instalar pnpm de verdade sobrescrevendo o shim.
+          corepack disable 2>/dev/null || true
+          rm -f /usr/local/bin/pnpm /usr/local/bin/pnpx 2>/dev/null || true
+          npm install -g pnpm@9.15.4 --force
+          hash -r 2>/dev/null || true
+          echo "pnpm path: $(command -v pnpm)"
           pnpm --version
+          pnpm config set store-dir "$HOME/.pnpm-store"
 
       - name: Install workspace dependencies (root)
         script: |
