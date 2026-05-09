@@ -25,9 +25,6 @@ workflows:
 
     cache:
       cache_paths:
-        - $CM_BUILD_DIR/node_modules
-        - $CM_BUILD_DIR/artifacts/scanner-mobile/node_modules
-        - $CM_BUILD_DIR/artifacts/scanner-mobile/ios/Pods
         - $HOME/.pnpm-store
         - $HOME/Library/Caches/CocoaPods
 
@@ -138,48 +135,48 @@ workflows:
           echo "export EXPO_ROUTER_APP_ROOT=\"$EXPO_ROUTER_APP_ROOT\"" > ios/.xcode.env.local
           echo "Configuração propagada via .env.local e ios/.xcode.env.local"
 
-          # Patch direto nos _ctx.*.js do expo-router. O transformer do Expo
-          # devia substituir process.env.EXPO_ROUTER_APP_ROOT pelo valor literal,
-          # mas em monorepos pnpm essa substituição falha. Trocamos manualmente
-          # em TODAS as cópias (hoisted + pnpm internal stores).
-          ESCAPED_ROOT=$(printf '%s' "$EXPO_ROUTER_APP_ROOT" | sed 's/[\/&]/\\&/g')
-
+          # Sobrescreve TODOS os _ctx.*.js do expo-router em qualquer cópia
+          # (hoisted + pnpm internal). O transformer oficial do Expo devia
+          # fazer isso em build time, mas em pnpm + node-linker=hoisted falha.
+          # Em vez de sed (que tem complicações de escape), reescrevemos o
+          # arquivo inteiro com Node.js gerando JSON-safe strings.
           echo "===== Procurando arquivos _ctx.*.js do expo-router ====="
-          CTX_FILES=$(find "$CM_BUILD_DIR" -name "_ctx.*.js" -path "*expo-router*" -not -path "*/.bak" 2>/dev/null)
+          CTX_FILES=$(find "$CM_BUILD_DIR" -name "_ctx.*.js" -path "*expo-router*" 2>/dev/null | grep -v '\.bak$')
           if [ -z "$CTX_FILES" ]; then
             echo "::error:: Nenhum _ctx.*.js encontrado!"
             exit 1
           fi
           echo "$CTX_FILES"
 
-          echo "===== Aplicando patch ====="
+          echo "===== Reescrevendo arquivos com conteúdo estático ====="
+          export PATCH_APP_ROOT="$EXPO_ROUTER_APP_ROOT"
           echo "$CTX_FILES" | while read CTX; do
             if [ -f "$CTX" ]; then
-              if grep -q "process\.env\.EXPO_ROUTER_APP_ROOT" "$CTX"; then
-                echo ">> Patching: $CTX"
-                sed -i.bak "s|process\.env\.EXPO_ROUTER_APP_ROOT|\"$ESCAPED_ROOT\"|g" "$CTX"
-                if grep -q "process\.env\.EXPO_ROUTER_APP_ROOT" "$CTX"; then
-                  echo "   ::error:: SED FALHOU em $CTX"
-                  cat "$CTX"
-                  exit 1
-                else
-                  echo "   ✓ Patched. Conteúdo:"
-                  head -5 "$CTX" | sed 's/^/       /'
-                fi
-              else
-                echo "   (já estava patchado): $CTX"
-              fi
+              echo ">> Sobrescrevendo: $CTX"
+              node -e "
+                const fs = require('fs');
+                const file = process.argv[1];
+                const root = process.env.PATCH_APP_ROOT;
+                const content =
+                  '// Patched by Codemagic build script\n' +
+                  'export const ctx = require.context(' +
+                  JSON.stringify(root) +
+                  ', true, /^\\\\.\\\\/(?!.*\\\\+not-found).*\\\\.([jt]sx?|[cm]js)\$/);\n';
+                fs.writeFileSync(file, content);
+              " "$CTX"
+              echo "   ✓ Conteúdo:"
+              cat "$CTX" | sed 's/^/       /'
             fi
           done
 
           echo "===== Verificação final ====="
-          REMAINING=$(grep -rl "process\.env\.EXPO_ROUTER_APP_ROOT" "$CM_BUILD_DIR/node_modules" --include="_ctx.*.js" 2>/dev/null || true)
+          REMAINING=$(grep -rl "process\.env\.EXPO_ROUTER_APP_ROOT" "$CM_BUILD_DIR" --include="_ctx.*.js" 2>/dev/null || true)
           if [ -n "$REMAINING" ]; then
             echo "::error:: Ainda há process.env.EXPO_ROUTER_APP_ROOT em:"
             echo "$REMAINING"
             exit 1
           fi
-          echo "Todos os _ctx.*.js foram patchados."
+          echo "✓ Todos os _ctx.*.js estão estáticos."
 
           WORKSPACE=$(ls -d ios/*.xcworkspace 2>/dev/null | head -n 1)
           if [ -z "$WORKSPACE" ]; then
