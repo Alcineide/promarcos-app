@@ -140,17 +140,46 @@ workflows:
 
           # Patch direto nos _ctx.*.js do expo-router. O transformer do Expo
           # devia substituir process.env.EXPO_ROUTER_APP_ROOT pelo valor literal,
-          # mas em monorepos pnpm + node-linker=hoisted essa substituição falha.
-          # Trocamos manualmente para garantir que Metro veja string estática.
+          # mas em monorepos pnpm essa substituição falha. Trocamos manualmente
+          # em TODAS as cópias (hoisted + pnpm internal stores).
           ESCAPED_ROOT=$(printf '%s' "$EXPO_ROUTER_APP_ROOT" | sed 's/[\/&]/\\&/g')
-          for CTX in "$CM_BUILD_DIR/node_modules/expo-router"/_ctx.*.js; do
+
+          echo "===== Procurando arquivos _ctx.*.js do expo-router ====="
+          CTX_FILES=$(find "$CM_BUILD_DIR" -name "_ctx.*.js" -path "*expo-router*" -not -path "*/.bak" 2>/dev/null)
+          if [ -z "$CTX_FILES" ]; then
+            echo "::error:: Nenhum _ctx.*.js encontrado!"
+            exit 1
+          fi
+          echo "$CTX_FILES"
+
+          echo "===== Aplicando patch ====="
+          echo "$CTX_FILES" | while read CTX; do
             if [ -f "$CTX" ]; then
-              echo "Patching $CTX"
-              sed -i.bak "s|process\.env\.EXPO_ROUTER_APP_ROOT|\"$ESCAPED_ROOT\"|g" "$CTX"
-              echo "Resultado:"
-              head -3 "$CTX"
+              if grep -q "process\.env\.EXPO_ROUTER_APP_ROOT" "$CTX"; then
+                echo ">> Patching: $CTX"
+                sed -i.bak "s|process\.env\.EXPO_ROUTER_APP_ROOT|\"$ESCAPED_ROOT\"|g" "$CTX"
+                if grep -q "process\.env\.EXPO_ROUTER_APP_ROOT" "$CTX"; then
+                  echo "   ::error:: SED FALHOU em $CTX"
+                  cat "$CTX"
+                  exit 1
+                else
+                  echo "   ✓ Patched. Conteúdo:"
+                  head -5 "$CTX" | sed 's/^/       /'
+                fi
+              else
+                echo "   (já estava patchado): $CTX"
+              fi
             fi
           done
+
+          echo "===== Verificação final ====="
+          REMAINING=$(grep -rl "process\.env\.EXPO_ROUTER_APP_ROOT" "$CM_BUILD_DIR/node_modules" --include="_ctx.*.js" 2>/dev/null || true)
+          if [ -n "$REMAINING" ]; then
+            echo "::error:: Ainda há process.env.EXPO_ROUTER_APP_ROOT em:"
+            echo "$REMAINING"
+            exit 1
+          fi
+          echo "Todos os _ctx.*.js foram patchados."
 
           WORKSPACE=$(ls -d ios/*.xcworkspace 2>/dev/null | head -n 1)
           if [ -z "$WORKSPACE" ]; then
