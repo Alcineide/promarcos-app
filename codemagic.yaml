@@ -138,6 +138,20 @@ workflows:
           echo "export EXPO_ROUTER_APP_ROOT=\"$EXPO_ROUTER_APP_ROOT\"" > ios/.xcode.env.local
           echo "Configuração propagada via .env.local e ios/.xcode.env.local"
 
+          # Patch direto nos _ctx.*.js do expo-router. O transformer do Expo
+          # devia substituir process.env.EXPO_ROUTER_APP_ROOT pelo valor literal,
+          # mas em monorepos pnpm + node-linker=hoisted essa substituição falha.
+          # Trocamos manualmente para garantir que Metro veja string estática.
+          ESCAPED_ROOT=$(printf '%s' "$EXPO_ROUTER_APP_ROOT" | sed 's/[\/&]/\\&/g')
+          for CTX in "$CM_BUILD_DIR/node_modules/expo-router"/_ctx.*.js; do
+            if [ -f "$CTX" ]; then
+              echo "Patching $CTX"
+              sed -i.bak "s|process\.env\.EXPO_ROUTER_APP_ROOT|\"$ESCAPED_ROOT\"|g" "$CTX"
+              echo "Resultado:"
+              head -3 "$CTX"
+            fi
+          done
+
           WORKSPACE=$(ls -d ios/*.xcworkspace 2>/dev/null | head -n 1)
           if [ -z "$WORKSPACE" ]; then
             echo "::error:: No .xcworkspace found in ios/"

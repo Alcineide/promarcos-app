@@ -13,6 +13,6 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
-config.resolver.disableHierarchicalLookup = true;
+config.transformer.unstable_allowRequireContext = true;
 
 module.exports = config;
